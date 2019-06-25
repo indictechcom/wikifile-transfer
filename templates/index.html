@@ -1,152 +1,87 @@
-<html>
-  <head>
-    <!-- Bootstap CSS -->
-    <link
-      rel="stylesheet"
-      href="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/css/bootstrap.min.css"
-    />
-    <meta
-      name="viewport"
-      content="width=device-width, initial-scale=1, shrink-to-fit=no"
-    />
-  </head>
-  <body>
-    <nav class="navbar navbar-expand-lg navbar-light bg-light">
-      <a class="navbar-brand" href="#">Wiki Filemover</a>
+{% extends 'base.html' %}
 
-      <ul class="navbar-nav ml-auto">
-        {% if data.auth %}
-        <li class="nav-item">
-          <a class="nav-link" href="#">
-            <button
-              type="button"
-              style="padding-top:2px;padding-bottom: 2px;padding-left:8px; padding-right: 8px;"
-              class="btn btn-secondary"
-            >
-              {{ data.username }}
-            </button>
-          </a>
-        </li>
-        {% endif %}
-        <li class="nav-item">
-          {% if data.auth %}
-          <a class="nav-link" href="#"
-            ><button
-              type="button"
-              style="padding-top:2px;padding-bottom: 2px;padding-left:8px; padding-right: 8px;"
-              class="btn btn-danger"
-            >
-              Logout
-            </button></a
-          >
-          {% else %}
-          <a class="nav-link" href="#">Help</a>
-          {% endif %}
-        </li>
-      </ul>
-    </nav>
-
-    {% if not data.auth %}
-    <div class="container" style="margin-top:20px;">
-      <div class="row">
-        <div class="col-md-6">
-          Some students space paragraphs, trying to separate points when the
-          process of writing is over. This is a major mistake. How much easier
-          your writing would become if you looked at it from another angle! It
-          is reasonable to use different types of paragraphs WHILE you are
-          writing. In case you follow all the rules, you'll have no difficulty
-          in bringing your message across to your reader. If you browse for ‘the
-          types of paragraphs' you'll be surprised how many results you'll get.
-          Among others, the four following types should be distinguished:
-          descriptive, expository, narrative, and persuasive paragraphs.
-          Mastering these types will help you a lot in writing almost every type
-          of texts.
-        </div>
-        <div class="col-md-6">
-          <button
-            type="button"
-            style="margin-top: 5vw;margin-left: 20vw;"
-            class="btn btn-success"
-          >
-            Login to the tool
-          </button>
-        </div>
-      </div>
-    </div>
-    {%else %}
-    <div class="container" style="margin-top:10vh;">
-      <div class="row">
-        <div class="col-md-3"></div>
-        <div class="col-md-6">
-          <form>
-            <div class="input-group mb-3">
-              <div class="input-group-prepend" style="width: 100%;">
-                <span class="input-group-text" id="basic-addon1">@</span>
-                <input
-                  type="email"
-                  class="form-control"
-                  placeholder="Enter Source URL"
-                />
-              </div>
-              <small class="form-text text-muted" style="margin-bottom:10px;">
-                Some help text 1
-              </small>
-
-              <!-- Get platform & language -->
-
-              <div class="form-group" style="width: 100%;">
-                    <label for="lang">Get Language</label>
-                    <select class="form-control" id="lang">
-                      <option value="en">English</option>
-                      <option value="te">Telegu</option>
-                      <option value="kn">kannada</option>
-                      <option value="hi">Hindi</option>
-                      <option value="ta">Tamil</option>
-                      <option value="ml">Malyalam</option>
-                      <option value="tcy">Tulu</option>
-                      <option value="bn">Bengali</option>
-                      <option value="or">Oriya</option>
-                      <option value="pa">Panjabi</option>
-                    </select>
-                    
-                    <br />
-                    
-                    <label for="project">Select Project</label>
-                    <select class="form-control" id="project">
-                      <option value="wikipedia">Wikipedia</option>
-                    </select>
-                  </div>
-
-              <!-- End of platform & language -->
-
-              <div class="input-group-prepend" style="width: 100%;">
-                <span class="input-group-text" id="basic-addon1">@</span>
-              <input
-                type="email"
-                class="form-control"
-                placeholder="Enter Name of the target file"
-              />
+{% block main %}
+    {% if data.username is none %}
+        <div class="row">
+            <div class="col-md-6">
+                Some students space paragraphs, trying to separate points when the
+                process of writing is over. This is a major mistake. How much easier
+                your writing would become if you looked at it from another angle! It
+                is reasonable to use different types of paragraphs WHILE you are
+                writing. In case you follow all the rules, you'll have no difficulty
+                in bringing your message across to your reader. If you browse for ‘the
+                types of paragraphs' you'll be surprised how many results you'll get.
+                Among others, the four following types should be distinguished:
+                descriptive, expository, narrative, and persuasive paragraphs.
+                Mastering these types will help you a lot in writing almost every type
+                of texts.
             </div>
-            <small
-              class="form-text text-muted"
-              style="margin-bottom:20px;"
-            >
-              Some help text 2
-            </small>
-
-            <button type="button" class="btn btn-primary" style="width: 100%;">
-              Upload to local wiki
-            </button>
-          </form>
+            <div class="col-md-6">
+                <a href="{{ url_for('mwoauth.login') }}"
+                   style="margin-top: 5vw;margin-left: 20vw;" class="btn btn-success">
+                    <i class="fa fa-sign-in"></i> Login to the tool
+                </a>
+            </div>
         </div>
-        <div class="col-md-3"></div>
-      </div>
-    </div>
-    {% endif %}
 
-    <!-- Bootstrap JS -->
-    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
-  </body>
-</html>
+    {% else %}
+        <div class="row">
+            <div class="col-md-3"></div>
+            <div class="col-md-6">
+                <form method="post">
+                    <div class="input-group mb-3">
+                        <div class="input-group-prepend" style="width: 100%;">
+                            <span class="input-group-text" id="basic-addon1">@</span>
+                            <input type="url" class="form-control" placeholder="Enter Source URL" />
+                        </div>
+                        <small class="form-text text-muted" style="margin-bottom:10px;">
+                            Some help text 1
+                        </small>
+
+                        <!-- Get platform & language -->
+
+                        <div class="form-group" style="width: 100%;">
+                            <label for="lang">Get Language</label>
+                            <select class="form-control" id="lang">
+                                <option value="en">English</option>
+                                <option value="te">Telegu</option>
+                                <option value="kn">kannada</option>
+                                <option value="hi">Hindi</option>
+                                <option value="ta">Tamil</option>
+                                <option value="ml">Malyalam</option>
+                                <option value="tcy">Tulu</option>
+                                <option value="bn">Bengali</option>
+                                <option value="or">Oriya</option>
+                                <option value="pa">Panjabi</option>
+                            </select>
+
+                            <br/>
+
+                            <label for="project">Select Project</label>
+                            <select class="form-control" id="project">
+                                <option value="wikipedia">Wikipedia</option>
+                                <option value="wikisource">Wikisource</option>
+                            </select>
+                        </div>
+
+                        <!-- End of platform & language -->
+
+                        <div class="input-group-prepend" style="width: 100%;">
+                            <span class="input-group-text" id="basic-addon1">@</span>
+                            <input type="text" class="form-control" placeholder="Enter Name of the target file"
+                            />
+                        </div>
+                        <small class="form-text text-muted" style="margin-bottom:20px;">
+                            Some help text 2
+                        </small>
+
+                        <button type="button" class="btn btn-primary" style="width: 100%;">
+                            Upload to local wiki
+                        </button>
+                    </div>
+                </form>
+            </div>
+            <div class="col-md-3"></div>
+        </div>
+    {% endif %}
+{% endblock main %}
