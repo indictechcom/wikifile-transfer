@@ -1,0 +1,7 @@
+__pycache__/
+.idea/*
+.idea/
+venv/
+
+temp_images/*
+!temp_images/.gitkeep

@@ -3,3 +3,4 @@ flask-mwoauth
 requests_oauthlib
 requests
 pyyaml
+urllib.parse

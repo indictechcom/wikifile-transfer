@@ -4,17 +4,7 @@
     {% if data.username is none %}
         <div class="row">
             <div class="col-md-6">
-                Some students space paragraphs, trying to separate points when the
-                process of writing is over. This is a major mistake. How much easier
-                your writing would become if you looked at it from another angle! It
-                is reasonable to use different types of paragraphs WHILE you are
-                writing. In case you follow all the rules, you'll have no difficulty
-                in bringing your message across to your reader. If you browse for ‘the
-                types of paragraphs' you'll be surprised how many results you'll get.
-                Among others, the four following types should be distinguished:
-                descriptive, expository, narrative, and persuasive paragraphs.
-                Mastering these types will help you a lot in writing almost every type
-                of texts.
+                Login First to Upload the images.
             </div>
             <div class="col-md-6">
                 <a href="{{ url_for('mwoauth.login') }}"
@@ -28,39 +18,59 @@
         <div class="row">
             <div class="col-md-3"></div>
             <div class="col-md-6">
-                <form method="post">
+                <form method="post" action="{{ url_for('upload') }}">
                     <div class="input-group mb-3">
                         <div class="input-group-prepend" style="width: 100%;">
                             <span class="input-group-text" id="basic-addon1">@</span>
-                            <input type="url" class="form-control" placeholder="Enter Source URL" />
+                            <input type="url" name="srcUrl" class="form-control" placeholder="Enter Source URL" />
                         </div>
                         <small class="form-text text-muted" style="margin-bottom:10px;">
-                            Some help text 1
+                            Ex. https://en.wikipedia.org/wiki/File:ABCD.jpg
                         </small>
 
                         <!-- Get platform & language -->
 
                         <div class="form-group" style="width: 100%;">
-                            <label for="lang">Get Language</label>
-                            <select class="form-control" id="lang">
-                                <option value="en">English</option>
-                                <option value="te">Telegu</option>
-                                <option value="kn">kannada</option>
-                                <option value="hi">Hindi</option>
-                                <option value="ta">Tamil</option>
-                                <option value="ml">Malyalam</option>
-                                <option value="tcy">Tulu</option>
-                                <option value="bn">Bengali</option>
-                                <option value="or">Oriya</option>
-                                <option value="pa">Panjabi</option>
+                            <label for="project">Select Project</label>
+                            <select class="form-control" id="tr-project" name="tr-project">
+                                <option value="wikipedia">Wikipedia</option>
+                                <option value="wikisource">Wikisource</option>
+                                <option value="wikibooks">Wikibooks</option>
+                                <option value="wikinews">Wikinews</option>
+                                <option value="wikiquote">Wikiquote</option>
+                                <option value="wiktionary">Wiktionary</option>
+                                <option value="wikiversity">Wikiversity</option>
                             </select>
 
                             <br/>
 
-                            <label for="project">Select Project</label>
-                            <select class="form-control" id="project">
-                                <option value="wikipedia">Wikipedia</option>
-                                <option value="wikisource">Wikisource</option>
+                            <label for="lang">Select Language</label>
+                            <select class="form-control" id="tr-lang" name="tr-lang"">
+                                <option value="as">Assamese</option>
+                                <option value="bn">Bangla</option>
+                                <option value="bh">Bhojpuri</option>
+                                <option value="bpy">Bishnupriya Manipuri</option>
+                                <option value="gu">Gujarati</option>
+                                <option value="en">English</option>
+                                <option value="hi">Hindi</option>
+                                <option value="kn">Kannada</option>
+                                <option value="ks">Kashmiri</option>
+                                <option value="gom">Konkani</option>
+                                <option value="mai">Maithili</option>
+                                <option value="ml">Malayalam</option>
+                                <option value="mr">Marathi</option>
+                                <option value="ne">Nepali</option>
+                                <option value="new">Newari</option>
+                                <option value="or">Oriya</option>
+                                <option value="pi">Pali</option>
+                                <option value="pa">Punjabi</option>
+                                <option value="sa">Sanskrit</option>
+                                <option value="sat">Santali</option>
+                                <option value="sd">Sindhi</option>
+                                <option value="ta">Tamil</option>
+                                <option value="te">Telugu</option>
+                                <option value="tcy">Tulu</option>
+                                <option value="ur">Urdu</option>
                             </select>
                         </div>
 
@@ -68,14 +78,15 @@
 
                         <div class="input-group-prepend" style="width: 100%;">
                             <span class="input-group-text" id="basic-addon1">@</span>
-                            <input type="text" class="form-control" placeholder="Enter Name of the target file"
+                            <input type="text" name="tr-filename" class="form-control" placeholder="Name of the Target file"
                             />
                         </div>
                         <small class="form-text text-muted" style="margin-bottom:20px;">
-                            Some help text 2
+                            Enter Name of the target file without File: or Image: prefix and Image extension suffix<br>
+                            Ex. ABCD
                         </small>
 
-                        <button type="button" class="btn btn-primary" style="width: 100%;">
+                        <button type="submit" class="btn btn-primary" style="width: 100%;">
                             Upload to local wiki
                         </button>
                     </div>
