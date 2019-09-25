@@ -4,7 +4,18 @@
     {% if data.username is none %}
         <div class="row">
             <div class="col-md-6">
-                Login First to Upload the images.
+                You have to Login First to Upload the images.
+                <br>
+                <br>
+                <blockquote class="blockquote">
+                    <p>
+                        <small>
+                            <i class="fa fa-quote-left"></i> Imagine a world in which every single person on the planet is given free access to the sum of all human knowledge.
+                            That's what we're doing.
+                            <i class="fa fa-quote-right"></i>
+                        </small>
+                    </p>
+                </blockquote>
             </div>
             <div class="col-md-6">
                 <a href="{{ url_for('mwoauth.login') }}"
@@ -22,7 +33,7 @@
                     <div class="input-group mb-3">
                         <div class="input-group-prepend" style="width: 100%;">
                             <span class="input-group-text" id="basic-addon1">@</span>
-                            <input type="url" name="srcUrl" class="form-control" placeholder="Enter Source URL" />
+                            <input type="url" id="srcUrl" name="srcUrl" class="form-control" placeholder="Enter Source URL" />
                         </div>
                         <small class="form-text text-muted" style="margin-bottom:10px;">
                             Ex. https://en.wikipedia.org/wiki/File:ABCD.jpg
@@ -31,7 +42,7 @@
                         <!-- Get platform & language -->
 
                         <div class="form-group" style="width: 100%;">
-                            <label for="project">Select Project</label>
+                            <label for="tr-project">Select Project</label>
                             <select class="form-control" id="tr-project" name="tr-project">
                                 <option value="wikipedia">Wikipedia</option>
                                 <option value="wikisource">Wikisource</option>
@@ -78,16 +89,17 @@
 
                         <div class="input-group-prepend" style="width: 100%;">
                             <span class="input-group-text" id="basic-addon1">@</span>
-                            <input type="text" name="tr-filename" class="form-control" placeholder="Name of the Target file"
+                            <input type="text" name="tr-filename" id="tr-filename" class="form-control" placeholder="Name of the Target file"
                             />
                         </div>
                         <small class="form-text text-muted" style="margin-bottom:20px;">
                             Enter Name of the target file without File: or Image: prefix and Image extension suffix<br>
                             Ex. ABCD
                         </small>
+                        <div id="trfilename-error-hint" style="width: 100%;display: none;color: red"></div>
 
-                        <button type="submit" class="btn btn-primary" style="width: 100%;">
-                            Upload to local wiki
+                        <button type="submit" id="wt-submit" disabled class="btn btn-primary" style="width: 100%;">
+                            <i class="fa fa-upload" aria-hidden="true"></i> Upload to Target wiki
                         </button>
                     </div>
                 </form>

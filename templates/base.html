@@ -1,18 +1,25 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
+    <title>Wikifile-transfer</title>
+    <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Indic_TechCom_Sample_Logo_06_Modified.svg/48px-Indic_TechCom_Sample_Logo_06_Modified.svg.png">
 
     <!-- Bootstap CSS -->
-    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.3.1/css/bootstrap.min.css"/>
-    <link href="//cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="//tools-static.wmflabs.org/cdnjs/ajax/libs/twitter-bootstrap/4.3.1/css/bootstrap.min.css"/>
+    <link rel="stylesheet" href="//tools-static.wmflabs.org/cdnjs/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css" >
 
     <!-- Bootstrap JS -->
-    <script src="https://code.jquery.com/jquery-3.2.1.slim.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.12.9/umd/popper.min.js"></script>
-    <script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.0.0/js/bootstrap.min.js"></script>
+    <script src="https://tools-static.wmflabs.org/cdnjs/ajax/libs/jquery/3.2.1/jquery.min.js"></script>
+    <script src="https://tools-static.wmflabs.org/cdnjs/ajax/libs/twitter-bootstrap/4.3.1/js/bootstrap.min.js"></script>
+
+    <!--  Custom JS -->
+    <script type="text/javascript" src="{{ url_for('static', filename='wikifile-transfer.js') }}"></script>
 </head>
 <body>
 <nav class="navbar navbar-light bg-light">
+    <a class="navbar-brand" href="#">
+        <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Indic_TechCom_Logo_%28Horizontal%29.svg/150px-Indic_TechCom_Logo_%28Horizontal%29.svg.png" alt="Logo" style="width:120px;">
+    </a>
     <a class="navbar-brand" href="{{ url_for('index') }}">WikiFile Transfer</a>
 
     <!-- Check whether the user is login or not -->
@@ -30,7 +37,7 @@
     {% else %}
         <ul class="nav navbar-nav navbar-right">
             <li>
-                <a class="nav-link" href="#">Help</a>
+                <a class="nav-link" href="https://meta.wikimedia.org/wiki/Indic-TechCom/Tools/Wikifile-transfer">Help</a>
             </li>
         </ul>
     {% endif %}
