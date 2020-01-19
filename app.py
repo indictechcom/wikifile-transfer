@@ -37,7 +37,7 @@ migrate = Migrate(app, db)
 # ORM to store the User Data
 class User(db.Model):
     id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(255), unique=True)
+    username = db.Column(db.String(255))
     pref_project = db.Column(db.String(15))
     pref_language = db.Column(db.String(4))
     user_language = db.Column(db.String(4), default='en') # will use in future
