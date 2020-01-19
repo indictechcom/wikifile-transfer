@@ -1,7 +1,13 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from flask import Flask, render_template, request, session, abort
+from flask import Flask, render_template, request, session, abort, \
+    redirect, url_for
 from flask_mwoauth import MWOAuth
+from flask_sqlalchemy import SQLAlchemy
+from flask_migrate import Migrate
+from flask_wtf import FlaskForm
+from wtforms_components import SelectField
 import requests_oauthlib
 import requests
 import os
@@ -23,29 +29,70 @@ API_ENDPOINT = BASE_URL + '/api.php'
 CONSUMER_KEY = app.config['CONSUMER_KEY']
 CONSUMER_SECRET = app.config['CONSUMER_SECRET']
 
+# Create Database and Migration Object
+db = SQLAlchemy( app )
+migrate = Migrate(app, db)
+
+
+# ORM to store the User Data
+class User(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    username = db.Column(db.String(255), unique=True)
+    pref_project = db.Column(db.String(15))
+    pref_language = db.Column(db.String(4))
+    user_language = db.Column(db.String(4), default='en') # will use in future
+
+    def __repr__(self):
+        return '<User %r>' % self.username
+
+
+class SelectFields(FlaskForm):
+    projects = [ ('wikipedia','Wikipedia'), ('wikisource','Wikisource'),
+                 ('wikibooks', 'Wikibooks'), ('wikinews','Wikinews'),
+                 ('wikiquote', 'Wikiquote'),('wiktionary', 'Wiktionary'),
+                 ('wikiversity', 'Wikiversity')
+    ]
+    lang = [ ('as','Assamese'),('bn','Bangla'), ('bh','Bhojpuri'),
+             ('bpy','Bishnupriya Manipuri'), ('gu','Gujarati'),
+             ('en','English'), ('hi','Hindi'),('kn','Kannada'), ('ks','Kashmiri'),
+             ('gom','Konkani'),('mai','Maithili'),('ml','Malayalam'), ('mr','Marathi'),
+             ('ne','Nepali'),('new','Newari'),('or','Oriya'),('pi','Pali'),
+             ('pa','Punjabi'),('sa','Sanskrit'),('sat','Santali'),('sd','Sindhi'),
+             ('ta','Tamil'),('te','Telugu'),('tcy','Tulu'),('ur','Urdu')
+    ]
+
+    trproject = SelectField(
+        'Select Project',
+        choices = projects,
+        render_kw = { "class":"form-control" }
+    )
+    trlang = SelectField(
+        'Select Language',
+        choices = lang,
+        render_kw = { "class":"form-control" }
+    )
+
 # Register blueprint to app
 MW_OAUTH = MWOAuth(base_url=BASE_URL, consumer_key=CONSUMER_KEY, consumer_secret=CONSUMER_SECRET)
 app.register_blueprint(MW_OAUTH.bp)
+
 
 # /index route for return_to
 @app.route('/index', methods=['GET'])
 @app.route("/")
 def index():
+    if (logged() is not None) and ( db_user() is not None):
+        user = db_user()
+        fields = SelectFields(trlang=user.pref_language, trproject=user.pref_project)
+    else:
+        fields = SelectFields()
 
-    data = {
-        'username': MW_OAUTH.get_current_user(True)
-    }
-
-    return render_template('index.html', data=data)
+    return render_template('index.html', field=fields)
 
 
 @app.route('/upload', methods = ['POST'])
 def upload():
     if request.method == 'POST':
-
-        data = {
-            'username': MW_OAUTH.get_current_user(True)
-        }
 
         # Getting Source Details
         src_url = urllib.parse.unquote( request.form['srcUrl'] )
@@ -60,8 +107,8 @@ def upload():
         downloaded_filename = download_image(src_project, src_lang, src_filename)
 
         # Getting Target Details
-        tr_project = request.form['tr-project']
-        tr_lang = request.form['tr-lang']
+        tr_project = request.form['trproject']
+        tr_lang = request.form['trlang']
         tr_filename = request.form['tr-filename']
         tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
 
@@ -98,7 +145,6 @@ def upload():
             }
 
             response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
-            print(response)
 
             # Try block to get Link and URL
             try:
@@ -106,13 +152,13 @@ def upload():
                 file_link = response["upload"]["imageinfo"]["url"]
             except KeyError:
                 error = True
-                return render_template('upload.html', data= data, error=error)
+                return render_template('upload.html', error=error)
 
-            return render_template('upload.html', data=data, wikifileURL=wikifile_url, fileLink=file_link, error=error)
+            return render_template('upload.html', wikifileURL=wikifile_url, fileLink=file_link, error=error)
 
         # If we didn't have enough data, just throw an error
         error = True
-        return render_template('upload.html', data= data, error=error)
+        return render_template('upload.html', error=error)
     else:
         abort(400)
 
@@ -149,6 +195,41 @@ def download_image(src_project, src_lang, src_filename):
     return filename
 
 
+@app.route('/preference', methods = ['GET', 'POST'])
+def preference():
+
+    if request.method == 'GET':
+        user = db_user()
+        if db_user() is not None:
+            fields = SelectFields(trlang=user.pref_language, trproject=user.pref_project)
+        else:
+            fields = SelectFields()
+
+        return render_template('preference.html', field=fields)
+
+    elif request.method == 'POST':
+        # Get the data
+        pre_project = request.form['trproject']
+        pre_lang = request.form['trlang']
+
+        # Add into database
+        cur_username = MW_OAUTH.get_current_user(True)
+        user = User.query.filter_by(username=cur_username).first()
+        if user is None:
+            user = User(username=cur_username,pref_language=pre_lang, pref_project=pre_project)
+            db.session.add(user)
+        else:
+            user.pref_language = pre_lang
+            user.pref_project = pre_project
+
+        db.session.commit()
+
+        return redirect(url_for('index'))
+
+    else:
+        abort(400)
+
+
 def authenticated_session():
     if 'mwoauth_access_token' in session:
         auth = requests_oauthlib.OAuth1(
@@ -161,6 +242,27 @@ def authenticated_session():
 
     return None
 
+
+def db_user():
+    if logged():
+        user = User.query.filter_by(username=MW_OAUTH.get_current_user(True)).first()
+        return user
+    else:
+        return None
+
+
+def logged():
+    if MW_OAUTH.get_current_user(True) is not None:
+        return MW_OAUTH.get_current_user(True)
+    else:
+        return None
+
+@app.context_processor
+def inject_base_variables():
+    return {
+        "logged": logged(),
+        "username": MW_OAUTH.get_current_user(True)
+    }
 
 if __name__ == "__main__":
     app.run()

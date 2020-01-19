@@ -1,7 +1,7 @@
 {% extends 'base.html' %}
 
 {% block main %}
-    {% if data.username is none %}
+    {% if logged is none %}
         <div class="row">
             <div class="col-md-6">
                 You have to Login First to Upload the images.
@@ -40,51 +40,12 @@
                         </small>
 
                         <!-- Get platform & language -->
-
                         <div class="form-group" style="width: 100%;">
-                            <label for="tr-project">Select Project</label>
-                            <select class="form-control" id="tr-project" name="tr-project">
-                                <option value="wikipedia">Wikipedia</option>
-                                <option value="wikisource">Wikisource</option>
-                                <option value="wikibooks">Wikibooks</option>
-                                <option value="wikinews">Wikinews</option>
-                                <option value="wikiquote">Wikiquote</option>
-                                <option value="wiktionary">Wiktionary</option>
-                                <option value="wikiversity">Wikiversity</option>
-                            </select>
-
-                            <br/>
-
-                            <label for="lang">Select Language</label>
-                            <select class="form-control" id="tr-lang" name="tr-lang"">
-                                <option value="as">Assamese</option>
-                                <option value="bn">Bangla</option>
-                                <option value="bh">Bhojpuri</option>
-                                <option value="bpy">Bishnupriya Manipuri</option>
-                                <option value="gu">Gujarati</option>
-                                <option value="en">English</option>
-                                <option value="hi">Hindi</option>
-                                <option value="kn">Kannada</option>
-                                <option value="ks">Kashmiri</option>
-                                <option value="gom">Konkani</option>
-                                <option value="mai">Maithili</option>
-                                <option value="ml">Malayalam</option>
-                                <option value="mr">Marathi</option>
-                                <option value="ne">Nepali</option>
-                                <option value="new">Newari</option>
-                                <option value="or">Oriya</option>
-                                <option value="pi">Pali</option>
-                                <option value="pa">Punjabi</option>
-                                <option value="sa">Sanskrit</option>
-                                <option value="sat">Santali</option>
-                                <option value="sd">Sindhi</option>
-                                <option value="ta">Tamil</option>
-                                <option value="te">Telugu</option>
-                                <option value="tcy">Tulu</option>
-                                <option value="ur">Urdu</option>
-                            </select>
+                            {{ field.trproject.label }}
+                            {{ field.trproject }}<br>
+                            {{ field.trlang.label }}
+                            {{ field.trlang }}<br>
                         </div>
-
                         <!-- End of platform & language -->
 
                         <div class="input-group-prepend" style="width: 100%;">

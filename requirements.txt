@@ -4,3 +4,8 @@ flask-mwoauth
 requests_oauthlib
 requests
 pyyaml
+pymysql
+flask-sqlalchemy
+flask-migrate
+flask-wtf
+wtforms-components

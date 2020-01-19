@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block main %}
+    {% if logged is none %}
+        <div class="alert alert-danger" role="alert">
+            You don't have permission to change your preference. Please <a href="{{ url_for('mwoauth.login') }}" class="alert-link">login</a> first.
+        </div>
+    {% else %}
+        <div class="container col-lg-6 p-3 bg-white shadow rounded">
+            <h2 class="text-center">My Preferences</h2>
+            <form action="{{ url_for('preference') }}" method="POST">
+                <div class="form-group" style="width: 100%;">
+                    {{ field.trproject.label }}
+                    {{ field.trproject }}<br>
+                    {{ field.trlang.label }}
+                    {{ field.trlang }}<br>
+                </div>
+                <br>
+                <button class="btn btn-outline-secondary" type="submit">Save</button>
+                <a class="btn btn-outline-danger" href="{{ url_for('index') }}">Cancel</a>
+            </form>
+        </div>
+    {% endif %}
+{% endblock %}

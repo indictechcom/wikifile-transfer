@@ -14,24 +14,31 @@
 
     <!--  Custom JS -->
     <script type="text/javascript" src="{{ url_for('static', filename='wikifile-transfer.js') }}"></script>
+    <style>
+        .navbar-nav .dropdown-menu {
+            position: absolute;
+        }
+    </style>
 </head>
 <body>
 <nav class="navbar navbar-light bg-light">
-    <a class="navbar-brand" href="#">
+    <a class="navbar-brand" href="{{ url_for('index') }}">
         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Indic_TechCom_Logo_%28Horizontal%29.svg/150px-Indic_TechCom_Logo_%28Horizontal%29.svg.png" alt="Logo" style="width:120px;">
     </a>
     <a class="navbar-brand" href="{{ url_for('index') }}">WikiFile Transfer</a>
 
     <!-- Check whether the user is login or not -->
-    {% if data.username is not none %}
-        <ul class="nav navbar-nav navbar-right">
-            <li>
-                <span class="navbar-text">
-                    You're logged in as {{ data.username }}!
-                </span>
-                <a class="btn btn-outline-danger" href="{{ url_for('mwoauth.logout') }}">
-                    <i class="fa fa-user"></i> Logout
+    {% if logged is not none %}
+            <ul class="nav navbar-nav navbar-right">
+            <li class="nav-item dropdown">
+                <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
+                You're logged in as <b>{{ username }}</b>
                 </a>
+                <div class="dropdown-menu" aria-labelledby="navbarDropdown">
+                    <a class="dropdown-item" href="{{ url_for('preference') }}"> <i class="fa fa-cogs"></i> Preference</a>
+                    <div class="dropdown-divider"></div>
+                    <a class="dropdown-item text-danger" href="{{ url_for('mwoauth.logout') }}"><i class="fa fa-user"></i> Logout</a>
+                </div>
             </li>
         </ul>
     {% else %}

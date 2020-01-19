@@ -64,16 +64,16 @@ $(document).ready(function () {
     /*
      * Validation work on the Target project and language
      */
-    $('#tr-lang').addClass('is-valid');
+    $('#trlang').addClass('is-valid');
 
-    $('#tr-lang').change(function () {
+    $('#trlang').change(function () {
         targetVal();
         if ($('#tr-filename').val() !== "") {
             trNameVal();
         }
     });
 
-    $('#tr-project').change(function () {
+    $('#trproject').change(function () {
         targetVal();
         if ($('#tr-filename').val() !== "") {
             trNameVal();
@@ -82,14 +82,14 @@ $(document).ready(function () {
 
     // Target Validation
     function targetVal() {
-        var tr_lang = $("#tr-lang").find("option:selected").attr('value'),
-            tr_project = $("#tr-project").find("option:selected").attr('value');
+        var tr_lang = $("#trlang").find("option:selected").attr('value'),
+            tr_project = $("#trproject").find("option:selected").attr('value');
 
         $.get('https://' + tr_lang + '.' + tr_project + '.org/w/api.php', {origin: "*"}).done(function () {
-            $('#tr-lang').removeClass('is-invalid').addClass('is-valid');
+            $('#trlang').removeClass('is-invalid').addClass('is-valid');
             changeBtnStatus();
         }).fail(function () {
-            $('#tr-lang').removeClass('is-valid').addClass('is-invalid');
+            $('#trlang').removeClass('is-valid').addClass('is-invalid');
         });
     }
 
@@ -102,8 +102,8 @@ $(document).ready(function () {
 
     function trNameVal() {
         if( $('#tr-filename').val() !== ''){
-            var tr_lang = $("#tr-lang").find("option:selected").attr('value'),
-                tr_project = $("#tr-project").find("option:selected").attr('value'),
+            var tr_lang = $("#trlang").find("option:selected").attr('value'),
+                tr_project = $("#trproject").find("option:selected").attr('value'),
                 tr_filename = $('#tr-filename').val(),
                 tr_fileextn = $('#srcUrl').val().split('/').slice(-1)[0].split('.').slice(-1);
 
@@ -135,7 +135,7 @@ $(document).ready(function () {
     }
 
     function changeBtnStatus(){
-        if ( $('#srcUrl').hasClass("is-valid") && $('#tr-lang').hasClass("is-valid") && $('#tr-filename').hasClass("is-valid") ) {
+        if ( $('#srcUrl').hasClass("is-valid") && $('#trlang').hasClass("is-valid") && $('#tr-filename').hasClass("is-valid") ) {
             $('#wt-submit').prop("disabled", false);
         } else {
             $('#wt-submit').prop("disabled", true);
