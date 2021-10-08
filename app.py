@@ -52,7 +52,7 @@ class SelectFields(FlaskForm):
                  ('wikiquote', 'Wikiquote'),('wiktionary', 'Wiktionary'),
                  ('wikiversity', 'Wikiversity')
     ]
-    lang = [ ('as','Assamese'),('bn','Bangla'), ('bh','Bhojpuri'),
+    lang = [ ('as','Assamese'),('awa','Awadhi'),('bn','Bangla'), ('bh','Bhojpuri'),
              ('bpy','Bishnupriya Manipuri'), ('gu','Gujarati'),
              ('en','English'), ('hi','Hindi'),('kn','Kannada'), ('ks','Kashmiri'),
              ('gom','Konkani'),('mai','Maithili'),('ml','Malayalam'), ('mr','Marathi'),
