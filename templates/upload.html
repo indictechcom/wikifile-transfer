@@ -4,11 +4,11 @@
 
 {% if error is not none %}
 <div class="alert alert-danger" role="alert">
-  Something went wrong while uploading the image :-/
+  <p>Something went wrong while uploading the image :-/</p>
 </div>
 {% else %}
 <div class="alert alert-success" role="alert">
-  Image is successfully uploaded to Target Wiki!
+  <p>Image is successfully uploaded to Target Wiki!</p>
   <a href="{{wikifileURL}}" target="_blank"> Click here to view it.</a>
 </div>
 <div>
@@ -16,7 +16,7 @@
   <br>
   <br>
   <a class="btn btn-primary" href="{{ url_for('index') }}">
-    Go back to home page
+  </p>Go back to home page</p>
   </a>
 </div>
 {% endif %}
