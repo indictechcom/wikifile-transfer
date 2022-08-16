@@ -55,7 +55,7 @@ class SelectFields(FlaskForm):
     lang = [ ('as','Assamese'),('awa','Awadhi'),('bn','Bangla'), ('bh','Bhojpuri'),
              ('bpy','Bishnupriya Manipuri'), ('gu','Gujarati'),
              ('en','English'), ('hi','Hindi'),('kn','Kannada'), ('ks','Kashmiri'),
-             ('gom','Konkani'),('mai','Maithili'),('ml','Malayalam'), ('mr','Marathi'),
+             ('gom','Konkani'),('mai','Maithili'),('ml','Malayalam'),('mr','Marathi'),('mei','Meitei'),
              ('ne','Nepali'),('new','Newari'),('or','Oriya'),('pi','Pali'),
              ('pa','Punjabi'),('sa','Sanskrit'),('sat','Santali'),('sd','Sindhi'),
              ('ta','Tamil'),('te','Telugu'),('tcy','Tulu'),('ur','Urdu')
