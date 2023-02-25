@@ -110,6 +110,7 @@ def upload():
         tr_project = request.form['trproject']
         tr_lang = request.form['trlang']
         tr_filename = request.form['tr-filename']
+        tr_filename = urllib.parse.unquote(tr_filename)
         tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
 
         # Authenticate Session
