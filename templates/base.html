@@ -18,6 +18,20 @@
         .navbar-nav .dropdown-menu {
             position: absolute;
         }
+        #footer {
+            position: fixed;
+            padding: 0px 10px 0px 10px;
+            bottom: 0;
+            width: 100%;
+            /* Height of the footer*/
+            height: 40px;
+            background: rgb(235, 207, 207);
+        }
+        #link {
+            color: rgb(96, 84, 255);
+            text-decoration: none;
+            display: inline-block;
+        }
     </style>
 </head>
 <body>
@@ -53,41 +67,8 @@
     {% block main %}
     {% endblock main %}
 </div>
+<div id="footer">
+    <p><img src="{{url_for('static', filename='GitHub-Mark.png')}}" alt="logo" height="40" width="40"><a id="link" href=" https://github.com/indictechcom/wikifile-transfer" target="_blank"> github.com</a></p>
+</footer>
 </body>
 </html>
-
-<html>
- 
-<head>
-    <style>
-        #footer {
-            position: fixed;
-            padding: 0px 10px 0px 10px;
-            bottom: 0;
-            width: 100%;
-            /* Height of the footer*/
-            height: 40px;
-            background: rgb(235, 207, 207);
-        }
-        #link {
-  color: rgb(96, 84, 255);
-  text-decoration: none;
-  display: inline-block;
-}
-    </style>
- 
-    <head>
- 
-        <body>
-            <center>
-                <div id="container">
-                    
-             
-                    <div id="footer">
-                        <p><img src="{{url_for('static', filename='GitHub-Mark.png')}}" alt="logo" height="40" width="40"><a id="link" href=" https://github.com/indictechcom/wikifile-transfer" target="_blank"> github.com</a></p>
-                      </footer>
-                </div>
-                </div>
-            </center>
-        </body>
-        <html>
