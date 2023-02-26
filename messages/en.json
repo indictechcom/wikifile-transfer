@@ -1,4 +1,9 @@
 {
+    "@metadata": {
+        "authors": [
+            "Rajagopalan20"
+        ]
+    },
     "site-title": "Wikifile-transfer",
     "navbar-title": "Wikifile-transfer",
     "logged-in-as": "You're logged in as",

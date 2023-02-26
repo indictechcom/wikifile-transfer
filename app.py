@@ -288,8 +288,6 @@ def preference():
 @app.route('/languagePreference', methods = ['GET', 'POST'])
 def languagePreference():
 
-    a = 0
-
     if request.method == 'GET':
         user = db_user()
         if db_user() is not None:
