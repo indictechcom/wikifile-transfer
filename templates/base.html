@@ -1,7 +1,7 @@
 <html>
 <head>
     <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no"/>
-    <title>Wikifile-transfer</title>
+    <title>{{_('site-title')}}</title>
     <link rel="icon" href="https://upload.wikimedia.org/wikipedia/commons/thumb/8/89/Indic_TechCom_Sample_Logo_06_Modified.svg/48px-Indic_TechCom_Sample_Logo_06_Modified.svg.png">
 
     <!-- Bootstap CSS -->
@@ -25,26 +25,27 @@
     <a class="navbar-brand" href="{{ url_for('index') }}">
         <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/9/95/Indic_TechCom_Logo_%28Horizontal%29.svg/150px-Indic_TechCom_Logo_%28Horizontal%29.svg.png" alt="Logo" style="width:120px;">
     </a>
-    <a class="navbar-brand" href="{{ url_for('index') }}">WikiFile Transfer</a>
+    <a class="navbar-brand" href="{{ url_for('index') }}">{{_('navbar-title')}}</a>
 
     <!-- Check whether the user is login or not -->
     {% if logged is not none %}
             <ul class="nav navbar-nav navbar-right">
             <li class="nav-item dropdown">
                 <a class="nav-link dropdown-toggle" href="#" id="navbarDropdown" role="button" data-toggle="dropdown" aria-haspopup="true" aria-expanded="false">
-                You're logged in as <b>{{ username }}</b>
+                    {{_('logged-in-as')}} <b>{{ username }}</b>
                 </a>
                 <div class="dropdown-menu" aria-labelledby="navbarDropdown">
-                    <a class="dropdown-item" href="{{ url_for('preference') }}"> <i class="fa fa-cogs"></i> Preference</a>
+                    <a class="dropdown-item" href="{{ url_for('preference') }}"> <i class="fa fa-cogs"></i> {{_('preference')}}</a>
                     <div class="dropdown-divider"></div>
-                    <a class="dropdown-item text-danger" href="{{ url_for('mwoauth.logout') }}"><i class="fa fa-user"></i> Logout</a>
+                    <a class="dropdown-item text-danger" href="{{ url_for('languagePreference') }}"><i class="fa fa-language"></i> {{_('language')}}</a>
+                    <a class="dropdown-item text-danger" href="{{ url_for('mwoauth.logout') }}"><i class="fa fa-user"></i> {{_('logout')}}</a>
                 </div>
             </li>
         </ul>
     {% else %}
         <ul class="nav navbar-nav navbar-right">
             <li>
-                <a class="nav-link" href="https://meta.wikimedia.org/wiki/Indic-TechCom/Tools/Wikifile-transfer">Help</a>
+                <a class="nav-link" href="https://meta.wikimedia.org/wiki/Indic-TechCom/Tools/Wikifile-transfer">{{_('help')}}</a>
             </li>
         </ul>
     {% endif %}

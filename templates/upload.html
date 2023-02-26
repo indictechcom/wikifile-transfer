@@ -4,19 +4,19 @@
 
 {% if error is not none %}
 <div class="alert alert-danger" role="alert">
-  <p>Something went wrong while uploading the image :-/</p>
+  <p>{{_('something-went-wrong-while-uploading-image')}}</p>
 </div>
 {% else %}
 <div class="alert alert-success" role="alert">
-  <p>Image is successfully uploaded to Target Wiki!</p>
-  <a href="{{wikifileURL}}" target="_blank"> Click here to view it.</a>
+  <p>{{_('image-uploaded-successfully')}}</p>
+  <a href="{{wikifileURL}}" target="_blank"> {{_('click-here-to-view-the-image')}}</a>
 </div>
 <div>
   <img class="img-thumbnail rounded" src="{{fileLink}}">
   <br>
   <br>
   <a class="btn btn-primary" href="{{ url_for('index') }}">
-  </p>Go back to home page</p>
+  </p>{{_('go-back-to-the-home-page')}}</p>
   </a>
 </div>
 {% endif %}

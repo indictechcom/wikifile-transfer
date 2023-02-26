@@ -4,14 +4,13 @@
     {% if logged is none %}
         <div class="row">
             <div class="col-md-6">
-                You have to Login First to Upload the images.
+                {{_('login-to-upload-images')}}
                 <br>
                 <br>
                 <blockquote class="blockquote">
                     <p>
                         <small>
-                            <i class="fa fa-quote-left"></i> Imagine a world in which every single person on the planet is given free access to the sum of all human knowledge.
-                            That's what we're doing.
+                            <i class="fa fa-quote-left"></i> {{_('quote-1')}}
                             <i class="fa fa-quote-right"></i>
                         </small>
                     </p>
@@ -20,7 +19,7 @@
             <div class="col-md-6">
                 <a href="{{ url_for('mwoauth.login') }}"
                    style="margin-top: 5vw;margin-left: 20vw;" class="btn btn-success">
-                    <i class="fa fa-sign-in"></i> Login to the tool
+                    <i class="fa fa-sign-in"></i> {{_('login-to-the-tool')}}
                 </a>
             </div>
         </div>
@@ -36,7 +35,7 @@
                             <input type="url" id="srcUrl" name="srcUrl" class="form-control" placeholder="Enter Source URL" />
                         </div>
                         <small class="form-text text-muted" style="margin-bottom:10px;">
-                            Ex. https://en.wikipedia.org/wiki/File:ABCD.jpg
+                            {{_('example-image')}}
                         </small>
 
                         <!-- Get platform & language -->
@@ -54,13 +53,12 @@
                             />
                         </div>
                         <small class="form-text text-muted" style="margin-bottom:20px;">
-                            Enter Name of the target file without File: or Image: prefix and Image extension suffix<br>
-                            Ex. ABCD
+                            {{_('enter-the-name-of-the-target-without-the-file-extension')}}
                         </small>
                         <div id="trfilename-error-hint" style="width: 100%;display: none;color: red"></div>
 
                         <button type="submit" id="wt-submit" disabled class="btn btn-primary" style="width: 100%;">
-                            <i class="fa fa-upload" aria-hidden="true"></i> Upload to Target wiki
+                            <i class="fa fa-upload" aria-hidden="true"></i> {{_('upload-to-target-wiki')}}
                         </button>
                     </div>
                 </form>
