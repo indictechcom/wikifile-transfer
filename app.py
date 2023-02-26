@@ -28,10 +28,6 @@ app.config['BABEL_DEFAULT_LOCALE'] = 'en'
 locales = Locales(app)
 _ = locales.get_message
 
-messages_dir = os.path.join(os.path.dirname(__file__), "messages")
-messages_files = os.listdir(messages_dir)
-languages = {f.split(".")[0]:None for f in messages_files}
-
 # Load configuration from YAML file
 __dir__ = os.path.dirname(__file__)
 app.config.update(yaml.safe_load(open(os.path.join(__dir__, 'config.yaml'))))
@@ -237,7 +233,6 @@ def preference():
         # Get the data
         pre_project = request.form['trproject']
         pre_lang = request.form['trlang']
-        # trSiteLang = request.form['trSiteLang']
 
         # Add into database
         cur_username = MW_OAUTH.get_current_user(True)
@@ -324,8 +319,8 @@ def logged():
 @app.context_processor
 def inject_base_variables():
     return {
-        "logged": "True",
-        "username": "Rajagopalan20"
+        "logged": logged(),
+        "username": MW_OAUTH.get_current_user(True)
     }
 
 if __name__ == "__main__":
