@@ -105,6 +105,7 @@ def upload():
 
         # Downloading the source file and getting saved file name
         downloaded_filename = download_image(src_project, src_lang, src_filename)
+        file_content = get_file_content(src_project, src_lang, src_filename)
 
         # Getting Target Details
         tr_project = request.form['trproject']
@@ -154,6 +155,17 @@ def upload():
             except KeyError:
                 error = True
                 return render_template('upload.html', error=error)
+            
+            # API Parameters to upload the file description
+            edit_params = {
+                "action": "edit",
+                "title": "File:" + tr_filename + "." + src_fileext,
+                "token": csrf_token,
+                "format": "json",
+                "appendtext": file_content
+            }
+
+            response = requests.post(url=tr_endpoint, data=edit_params, auth=ses).json()
 
             return render_template('upload.html', wikifileURL=wikifile_url, fileLink=file_link, error=error)
 
@@ -195,6 +207,27 @@ def download_image(src_project, src_lang, src_filename):
 
     return filename
 
+def get_file_content(src_project, src_lang, src_filename):
+    src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
+
+    param = {
+        "action": "query",
+        "format": "json",
+        "prop": "revisions",
+        "titles": src_filename,
+        "formatversion": "2",
+        "rvprop": "content",
+        "rvslots": "main"
+    }
+
+    page = requests.get(url=src_endpoint, params=param).json()['query']['pages']
+
+    try:
+        content = page[0]["revisions"][0]["slots"]["main"]["content"]
+    except KeyError:
+        raise ValueError('Can\'t find the image URL :(')
+
+    return content
 
 @app.route('/preference', methods = ['GET', 'POST'])
 def preference():
