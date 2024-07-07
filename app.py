@@ -15,9 +15,18 @@ import yaml
 import re
 import datetime
 import urllib.parse
+from flask_jsonlocale import Locales
+from langcodes import Language
 
 app = Flask(__name__)
 app.secret_key = os.urandom(24)
+
+# Translation Config
+app.config["MESSAGES_DIR"] = "messages"
+app.config["SECRET_KEY"] = os.urandom(24)
+app.config['BABEL_DEFAULT_LOCALE'] = 'en'
+locales = Locales(app)
+_ = locales.get_message
 
 # Load configuration from YAML file
 __dir__ = os.path.dirname(__file__)
@@ -41,9 +50,16 @@ class User(db.Model):
     pref_project = db.Column(db.String(15))
     pref_language = db.Column(db.String(4))
     user_language = db.Column(db.String(4), default='en') # will use in future
+    site_language = db.Column(db.String(4), default='en') # will use in future
 
     def __repr__(self):
         return '<User %r>' % self.username
+    
+
+# obtain the names of all json files in the messages directory
+messages_dir = os.path.join(os.path.dirname(__file__), "messages")
+messages_files = os.listdir(messages_dir)
+languages = [(f.split(".")[0],Language.make(language=f.split(".")[0]).display_name()) for f in messages_files]
 
 
 class SelectFields(FlaskForm):
@@ -71,6 +87,11 @@ class SelectFields(FlaskForm):
         choices = lang,
         render_kw = { "class":"form-control" }
     )
+    siteLangPref = SelectField(
+        'Select site language',
+        choices = languages,
+        render_kw = { "class":"form-control" }
+    )
 
 # Register blueprint to app
 MW_OAUTH = MWOAuth(base_url=BASE_URL, consumer_key=CONSUMER_KEY, consumer_secret=CONSUMER_SECRET)
@@ -84,11 +105,11 @@ def index():
     if (logged() is not None) and ( db_user() is not None):
         user = db_user()
         fields = SelectFields(trlang=user.pref_language, trproject=user.pref_project)
+        locales.set_locale(user.site_language)
     else:
         fields = SelectFields()
 
     return render_template('index.html', field=fields)
-
 
 @app.route('/upload', methods = ['POST'])
 def upload():
@@ -105,11 +126,13 @@ def upload():
 
         # Downloading the source file and getting saved file name
         downloaded_filename = download_image(src_project, src_lang, src_filename)
+        file_content = get_file_content(src_project, src_lang, src_filename)
 
         # Getting Target Details
         tr_project = request.form['trproject']
         tr_lang = request.form['trlang']
         tr_filename = request.form['tr-filename']
+        tr_filename = urllib.parse.unquote(tr_filename)
         tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
 
         # Authenticate Session
@@ -153,6 +176,17 @@ def upload():
             except KeyError:
                 error = True
                 return render_template('upload.html', error=error)
+            
+            # API Parameters to upload the file description
+            edit_params = {
+                "action": "edit",
+                "title": "File:" + tr_filename + "." + src_fileext,
+                "token": csrf_token,
+                "format": "json",
+                "appendtext": file_content
+            }
+
+            response = requests.post(url=tr_endpoint, data=edit_params, auth=ses).json()
 
             return render_template('upload.html', wikifileURL=wikifile_url, fileLink=file_link, error=error)
 
@@ -194,6 +228,27 @@ def download_image(src_project, src_lang, src_filename):
 
     return filename
 
+def get_file_content(src_project, src_lang, src_filename):
+    src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
+
+    param = {
+        "action": "query",
+        "format": "json",
+        "prop": "revisions",
+        "titles": src_filename,
+        "formatversion": "2",
+        "rvprop": "content",
+        "rvslots": "main"
+    }
+
+    page = requests.get(url=src_endpoint, params=param).json()['query']['pages']
+
+    try:
+        content = page[0]["revisions"][0]["slots"]["main"]["content"]
+    except KeyError:
+        raise ValueError('Can\'t find the image URL :(')
+
+    return content
 
 @app.route('/preference', methods = ['GET', 'POST'])
 def preference():
@@ -226,6 +281,41 @@ def preference():
 
         return redirect(url_for('index'))
 
+    else:
+        abort(400)
+
+
+@app.route('/languagePreference', methods = ['GET', 'POST'])
+def languagePreference():
+
+    if request.method == 'GET':
+        user = db_user()
+        if db_user() is not None:
+            fields = SelectFields(trlang=user.pref_language, trproject=user.pref_project)
+        else:
+            fields = SelectFields()
+
+        return render_template('languagePreference.html', field=fields)
+    
+    elif request.method == 'POST':
+        pref = request.form['siteLangPref']
+        locales.set_locale(request.form['siteLangPref'])
+
+        lcs = locales.get_locales()
+        per_lce = locales.get_permanent_locale()
+
+        cur_username = MW_OAUTH.get_current_user(True)
+        user = User.query.filter_by(username=cur_username).first()
+
+        if user is None:
+            user = User(username=cur_username, site_language=pref)
+            db.session.add(user)
+        else:
+            user.site_language = pref
+
+        db.session.commit()
+        return render_template('index.html', field=fields, lcs=lcs, per_lce=per_lce)
+    
     else:
         abort(400)
 

@@ -1,0 +1,24 @@
+{% extends 'base.html' %}
+
+{% block main %}
+    {% if logged is none %}
+        <div class="alert alert-danger" role="alert">
+            {{_('you-do-not-have-permission-to-change-preferences')}} <a href="{{ url_for('mwoauth.login') }}" class="alert-link">{{_('login')}}</a> {{_('first')}}.
+        </div>
+    {% else %}
+        <div class="container col-lg-6 p-3 bg-white shadow rounded">
+            <h2 class="text-center">{{_('language-preferences')}}</h2>
+            <form action="{{ url_for('languagePreference') }}" method="POST">
+                <div class='form-group' style="width: 100%">
+                    {{field.siteLangPref.label}}
+                    {{field.siteLangPref}}
+                </div>
+            <br>
+            <button class="btn btn-outline-secondary" type="submit">{{_('save')}}</button>
+            <a class="btn btn-outline-danger" href="{{ url_for('index') }}">{{_('cancel')}}</a>
+            </form>
+        </div>
+        <br>
+        
+    {% endif %}
+{% endblock %}

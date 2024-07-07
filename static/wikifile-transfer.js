@@ -48,7 +48,7 @@ $(document).ready(function () {
                 try {
                     var image_url = pages[Object.keys(pages)[0]].imageinfo[0].url;
                     $('#srcUrl').removeClass('is-invalid').addClass('is-valid');
-                    $('#tr-filename').val($('#srcUrl').val().split('/').slice(-1)[0].split(':')[1].replace(/\.[^/.]+$/, ""));
+                    $('#tr-filename').val(decodeURIComponent($('#srcUrl').val().split('/').slice(-1)[0].split(':')[1].replace(/\.[^/.]+$/, "")));
                     trNameVal();
                     changeBtnStatus();
 

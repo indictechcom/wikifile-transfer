@@ -9,3 +9,6 @@ flask-sqlalchemy
 flask-migrate
 flask-wtf
 wtforms-components
+flask-jsonlocale
+langcodes
+language-data
