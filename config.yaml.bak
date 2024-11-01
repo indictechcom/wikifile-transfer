@@ -1,8 +1,9 @@
-CONSUMER_KEY:
-CONSUMER_SECRET:
+ENV: dev # dev, prod
+CONSUMER_KEY: 
+CONSUMER_SECRET: 
 OAUTH_MWURI: https://meta.wikimedia.org/w
 SESSION_COOKIE_SECURE: True
 SESSION_REFRESH_EACH_REQUEST: False
 PREFERRED_URL_SCHEME: https
-SQLALCHEMY_DATABASE_URI: mysql+pymysql://root:@localhost/wikifile
+SQLALCHEMY_DATABASE_URI: mysql+pymysql://username:password@host.docker.internal/wikifile
 SQLALCHEMY_TRACK_MODIFICATIONS: False
