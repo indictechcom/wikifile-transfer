@@ -164,7 +164,7 @@ function Upload() {
         );
   
       case 2:
-        const fileNamePattern = /^[a-zA-Z0-9_()]+$/;;
+        const fileNamePattern = /^[a-zA-Z0-9_()]+$/;
         return targetFileName.trim() !== "" && fileNamePattern.test(targetFileName);
   
       default:
