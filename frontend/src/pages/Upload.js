@@ -218,8 +218,10 @@ function Upload() {
         const fileNameWithExtension = sourceUrl.split("/").pop() || "";
   
         if (fileNameWithExtension) {
-          const fileName = fileNameWithExtension.split(":")[1].split(".")[0];
-          setTargetFileName(fileName);
+          const fileName = fileNameWithExtension.split(":")?.[1]?.split(".")?.[0];
+          if (fileName) {
+            setTargetFileName(fileName);
+          }
         } else {
           setTargetFileName("");
         }
