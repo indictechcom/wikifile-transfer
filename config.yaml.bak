@@ -1,4 +1,5 @@
 ENV: dev # dev, prod
+SECRET_KEY: RandomeString
 CONSUMER_KEY: 
 CONSUMER_SECRET: 
 OAUTH_MWURI: https://meta.wikimedia.org/w
