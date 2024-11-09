@@ -173,9 +173,7 @@ function Upload() {
         }
 
       case 2:
-        const sourceUrlArr = sourceUrl.trim().split("/");
-        const sourceFileExt =
-          sourceUrlArr[sourceUrlArr.length - 1].split(".")[1];
+        const sourceFileExt = sourceUrl.substring(sourceUrl.lastIndexOf('.') + 1);
 
         const apiUrl = `https://${language}.${project}.org/w/api.php?action=query&titles=File:${encodeURIComponent(
           targetFileName
