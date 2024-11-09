@@ -12,3 +12,4 @@ celery
 redis
 gunicorn
 cryptography
+mwparserfromhell

@@ -1,5 +1,7 @@
 import datetime
 import requests
+import mwparserfromhell
+from templatelist import TEMPLATES
 
 def download_image(src_project, src_lang, src_filename):
     src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
@@ -72,6 +74,38 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         "file_link": file_link
     }
 
+
+def get_localized_wikitext(wikitext, src_endpoint, target_lang):
+    wikicode = mwparserfromhell.parse(wikitext)
+
+    for template in wikicode.filter_templates():
+        if template.name.strip() in TEMPLATES:
+            if template.has("Article"):
+                article_value = template.get("Article")
+
+                if article_value:
+                    article_title = article_value.value.strip()
+                    lang_param = {
+                        "action": "query",
+                        "format": "json",
+                        "prop": "langlinks",
+                        "titles": article_title,
+                        "formatversion": "2"
+                    }
+
+                    try:
+                        response = requests.get(url=src_endpoint, params=lang_param)
+                        response.raise_for_status()
+                        langlinks = response.json()["query"]["pages"][0]["langlinks"]
+
+                        for langlink in langlinks:
+                            if langlink["lang"] == target_lang:
+                                template.add("Article", langlink["title"])
+                                break
+                    except:
+                        return str(wikicode)
+
+    return str(wikicode)
 
 def getHeader():
     agent = 'Wikifile-transfer/1.0 (https://wikifile-transfer.toolforge.org; 0freerunning@gmail.com)'
