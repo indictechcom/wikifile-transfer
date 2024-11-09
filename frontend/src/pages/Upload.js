@@ -173,7 +173,9 @@ function Upload() {
         }
 
       case 2:
-        const sourceFileExt = sourceUrl.substring(sourceUrl.lastIndexOf('.') + 1);
+        const sourceFileExt = sourceUrl.substring(
+          sourceUrl.lastIndexOf(".") + 1
+        );
 
         const apiUrl = `https://${language}.${project}.org/w/api.php?action=query&titles=File:${encodeURIComponent(
           targetFileName
@@ -198,22 +200,25 @@ function Upload() {
 
   useEffect(() => {
     const fetchPageContent = (srcLang, srcProject, srcFileName) => {
-      backendApi.get("/api/get_wikitext", {
-        params: {
-          src_lang: srcLang,
-          src_project: srcProject,
-          src_filename: srcFileName,
-          tr_lang: language,
-        }
-      }).then((response) => {
-        if(response.data.wikitext){
-          setPageContent(response.data.wikitext);
-        } else {
-          toast.error(t("content-not-found"));
-        }
-      }).catch((error) => {
-        toast.error(t("fetch-content-error"));
-      });
+      backendApi
+        .get("/api/get_wikitext", {
+          params: {
+            src_lang: srcLang,
+            src_project: srcProject,
+            src_filename: srcFileName,
+            tr_lang: language,
+          },
+        })
+        .then((response) => {
+          if (response.data.wikitext) {
+            setPageContent(response.data.wikitext);
+          } else {
+            toast.error(t("content-not-found"));
+          }
+        })
+        .catch((error) => {
+          toast.error(t("fetch-content-error"));
+        });
     };
 
     if (uploadStatus.type === "success" && uploadStatus.data) {
@@ -301,7 +306,9 @@ function Upload() {
             <Box display="flex" justifyContent="center" mt={2}>
               <TextField
                 style={{ width: "650px" }}
-                value={uploadStatus.data.wikipage_url.split('/').pop()}
+                value={decodeURIComponent(uploadStatus.data.wikipage_url)
+                  .split("/")
+                  .pop()}
                 disabled={true}
                 slotProps={{
                   input: {
@@ -309,9 +316,13 @@ function Upload() {
                       <Button
                         variant="contained"
                         color="primary"
-                        onClick={() => navigator.clipboard.writeText(
-                          uploadStatus.data.wikipage_url.split('/').pop()
-                        )}
+                        onClick={() =>
+                          navigator.clipboard.writeText(
+                            decodeURIComponent(uploadStatus.data.wikipage_url)
+                              .split("/")
+                              .pop()
+                          )
+                        }
                       >
                         {t("copy")}
                       </Button>
