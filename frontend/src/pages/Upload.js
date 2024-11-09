@@ -49,14 +49,15 @@ function Upload() {
     t("add-template"),
   ];
 
-  const handleNext = () => {
-    if (activeStep === 2 && isStepValid()) {
+  const handleNext = async () => {
+    const isValid = await isStepValid();
+    if (activeStep === 2 && isValid === true) {
       handleUpload();
-    } else if (isStepValid()) {
+    } else if (isValid === true) {
       setError(null);
       setActiveStep((prevStep) => prevStep + 1);
-    } else {
-      toast.error(t("complete-all-fields"));
+    } else if (isValid !== true && isValid.length > 0) {
+      toast.error(t(isValid));
     }
   };
 
@@ -150,28 +151,52 @@ function Upload() {
       });
   };
 
-  const isStepValid = () => {
+  const isStepValid = async () => {
     switch (activeStep) {
       case 0:
-        return sourceUrl.trim() !== "" && sourceUrl.includes("/wiki/");
-  
+        if (sourceUrl.trim() !== "" && sourceUrl.includes("/wiki/")) {
+          return true;
+        } else {
+          return "enter-valid-source-url";
+        }
+
       case 1:
-        return (
+        if (
           project !== "" &&
           language !== "" &&
           projects.hasOwnProperty(project) &&
           projects[project].includes(language)
-        );
-  
+        ) {
+          return true;
+        } else {
+          return "enter-valid-project-language";
+        }
+
       case 2:
-        const fileNamePattern = /^[a-zA-Z0-9_()]+$/;
-        return targetFileName.trim() !== "" && fileNamePattern.test(targetFileName);
-  
+        const sourceUrlArr = sourceUrl.trim().split("/");
+        const sourceFileExt =
+          sourceUrlArr[sourceUrlArr.length - 1].split(".")[1];
+
+        const apiUrl = `https://${language}.${project}.org/w/api.php?action=query&titles=File:${encodeURIComponent(
+          targetFileName
+        )}.${sourceFileExt}&format=json&origin=*`;
+        const response = await axios.get(apiUrl);
+        const pages = response.data.query.pages;
+        const pageId = Object.keys(pages)[0];
+
+        if (pageId === "-1") {
+          console.log(pages[pageId]);
+          if (Object.keys(pages[pageId]).includes("missing")) {
+            return true;
+          } else if (Object.keys(pages[pageId]).includes("invalidreason")) {
+            return "target-file-name-invalid";
+          }
+        }
+        return "target-file-name-exist";
       default:
         return true;
     }
   };
-
 
   const fetchPageContent = async (srcLang, srcProject, srcFileName) => {
     try {
@@ -186,10 +211,10 @@ function Upload() {
         rvslots: "main",
         origin: "*",
       };
-  
+
       const response = await axios.get(srcEndpoint, { params });
       const pageData = response.data.query.pages;
-  
+
       if (pageData && pageData[0]?.revisions?.[0]?.slots?.main?.content) {
         const content = pageData[0].revisions[0].slots.main.content;
         setPageContent(content);
@@ -200,7 +225,7 @@ function Upload() {
       toast.error(t("fetch-content-error"));
     }
   };
-  
+
   useEffect(() => {
     if (uploadStatus.type === "success" && uploadStatus.data) {
       const sourceUrlObj = parseSourceUrl(sourceUrl);
@@ -216,11 +241,18 @@ function Upload() {
     if (sourceUrl) {
       if (sourceUrl.includes("/")) {
         const fileNameWithExtension = sourceUrl.split("/").pop() || "";
-  
+
         if (fileNameWithExtension) {
-          const fileName = fileNameWithExtension.split(":")?.[1]?.split(".")?.[0];
-          if (fileName) {
-            setTargetFileName(fileName);
+          const nameWithoutExtension =
+            fileNameWithExtension.includes(":") &&
+            fileNameWithExtension.includes(".")
+              ? fileNameWithExtension.substring(
+                  fileNameWithExtension.indexOf(":") + 1,
+                  fileNameWithExtension.lastIndexOf(".")
+                )
+              : "";
+          if (nameWithoutExtension) {
+            setTargetFileName(nameWithoutExtension);
           }
         } else {
           setTargetFileName("");
@@ -314,7 +346,10 @@ function Upload() {
               variant="contained"
               onClick={handleFinishWithoutEdit}
               disabled={loading}
-              sx={{ backgroundColor: 'red', '&:hover': { backgroundColor: 'darkred' } }}
+              sx={{
+                backgroundColor: "red",
+                "&:hover": { backgroundColor: "darkred" },
+              }}
             >
               {t("finish-without-edit")}
             </Button>
