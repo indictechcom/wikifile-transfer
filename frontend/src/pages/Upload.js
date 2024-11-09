@@ -310,6 +310,28 @@ function Upload() {
               width={260}
             />
             <Box display="flex" justifyContent="center" mt={2}>
+              <TextField
+                style={{ width: "650px" }}
+                value={uploadStatus.data.wikipage_url.split('/').pop()}
+                disabled={true}
+                slotProps={{
+                  input: {
+                    endAdornment: (
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        onClick={() => navigator.clipboard.writeText(
+                          uploadStatus.data.wikipage_url.split('/').pop()
+                        )}
+                      >
+                        ${t("copy")}
+                      </Button>
+                    ),
+                  },
+                }}
+              />
+            </Box>
+            <Box display="flex" justifyContent="center" mt={2}>
               <Button
                 variant="contained"
                 color="primary"

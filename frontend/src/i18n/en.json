@@ -53,5 +53,6 @@
     "enter-valid-source-url": "Please enter a valid source URL",
     "enter-valid-project-language": "Please select a valid project and language",
     "target-file-name-invalid": "Target file name contains invalid characters",
-    "target-file-name-exist": "Target file name already exists at target wiki"
+    "target-file-name-exist": "Target file name already exists at target wiki",
+    "copy": "Copy"
 }
