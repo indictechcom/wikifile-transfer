@@ -4,7 +4,7 @@
 from flask import Flask, request, session, jsonify, render_template
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
-from utils import download_image, getHeader, process_upload
+from utils import download_image, get_localized_wikitext, getHeader, process_upload
 from flask_cors import CORS
 import requests_oauthlib
 import requests
@@ -210,6 +210,46 @@ def languagePreference():
 
     else:
         return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+
+
+@app.route('/api/get_wikitext', methods=['GET'])
+def get_wikitext():
+    src_lang = request.args.get('src_lang')
+    src_project = request.args.get('src_project')
+    src_filename = request.args.get('src_filename')
+    tr_lang = request.args.get('tr_lang')
+
+    # In any case, return the strings only with 200 status code
+    if not all([src_lang, src_project, src_filename, tr_lang]):
+        return jsonify({"wikitext": ""}), 200
+
+    src_endpoint = f"https://{src_lang}.{src_project}.org/w/api.php"
+    content_params = {
+        "action": "query",
+        "format": "json",
+        "prop": "revisions",
+        "titles": src_filename,
+        "formatversion": "2",
+        "rvprop": "content",
+        "rvslots": "main",
+        "origin": "*"
+    }
+
+    try:
+        response = requests.get(src_endpoint, params=content_params)
+        response.raise_for_status()
+
+        page_data = response.json().get("query", {}).get("pages", [])
+
+        if page_data and page_data[0].get("revisions"):
+            wikitext = page_data[0]["revisions"][0]["slots"]["main"]["content"]
+            wikitext = get_localized_wikitext(wikitext, src_endpoint, tr_lang)
+
+            return jsonify({"wikitext": wikitext}), 200
+        else:
+            return jsonify({"wikitext": ""}), 200
+    except:
+        return jsonify({"wikitext": ""}), 200
 
 
 @app.route('/api/edit_page', methods=['POST'])

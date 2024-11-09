@@ -196,35 +196,26 @@ function Upload() {
     }
   };
 
-  const fetchPageContent = async (srcLang, srcProject, srcFileName) => {
-    try {
-      const srcEndpoint = `https://${srcLang}.${srcProject}.org/w/api.php`;
-      const params = {
-        action: "query",
-        format: "json",
-        prop: "revisions",
-        titles: srcFileName,
-        formatversion: "2",
-        rvprop: "content",
-        rvslots: "main",
-        origin: "*",
-      };
-
-      const response = await axios.get(srcEndpoint, { params });
-      const pageData = response.data.query.pages;
-
-      if (pageData && pageData[0]?.revisions?.[0]?.slots?.main?.content) {
-        const content = pageData[0].revisions[0].slots.main.content;
-        setPageContent(content);
-      } else {
-        toast.error(t("content-not-found"));
-      }
-    } catch (error) {
-      toast.error(t("fetch-content-error"));
-    }
-  };
-
   useEffect(() => {
+    const fetchPageContent = (srcLang, srcProject, srcFileName) => {
+      backendApi.get("/api/get_wikitext", {
+        params: {
+          src_lang: srcLang,
+          src_project: srcProject,
+          src_filename: srcFileName,
+          tr_lang: language,
+        }
+      }).then((response) => {
+        if(response.data.wikitext){
+          setPageContent(response.data.wikitext);
+        } else {
+          toast.error(t("content-not-found"));
+        }
+      }).catch((error) => {
+        toast.error(t("fetch-content-error"));
+      });
+    };
+
     if (uploadStatus.type === "success" && uploadStatus.data) {
       const sourceUrlObj = parseSourceUrl(sourceUrl);
       if (sourceUrlObj) {
@@ -233,7 +224,7 @@ function Upload() {
         fetchPageContent(srcLang, srcProject, srcFileName);
       }
     }
-  }, [uploadStatus, sourceUrl]);
+  }, [uploadStatus, sourceUrl, language, t]);
 
   useEffect(() => {
     if (sourceUrl) {
@@ -322,7 +313,7 @@ function Upload() {
                           uploadStatus.data.wikipage_url.split('/').pop()
                         )}
                       >
-                        ${t("copy")}
+                        {t("copy")}
                       </Button>
                     ),
                   },
