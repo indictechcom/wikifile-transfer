@@ -48,5 +48,10 @@
     "source-url-placeholder": "Ex. https://en.wikipedia.org/wiki/File:ABCD.jpg",
     "target-file-name-placeholder": "Ex. ABCD",
     "source-url-label": "Enter Source URL",
-    "target-file-name-label": "Name of the Target file"
+    "target-file-name-label": "Name of the Target file",
+    "upload-file-to-target-wiki": "Upload file to target wiki",
+    "enter-valid-source-url": "Please enter a valid source URL",
+    "enter-valid-project-language": "Please select a valid project and language",
+    "target-file-name-invalid": "Target file name contains invalid characters",
+    "target-file-name-exist": "Target file name already exists at target wiki"
 }
