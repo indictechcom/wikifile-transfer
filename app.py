@@ -213,7 +213,7 @@ def languagePreference():
         return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
-@app.route('/api/edit_page', methods=['GET', 'POST'])
+@app.route('/api/edit_page', methods=['POST'])
 def editPage():
     if request.method == 'POST':
         data = request.get_json()
@@ -250,7 +250,7 @@ def editPage():
             "appendtext": content
         }
 
-        response = requests.post(url=target_endpoint, data=edit_params, auth=ses).json()
+        response = requests.post(url=target_endpoint, data=edit_params, auth=ses)
 
         if response.status_code == 200:
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
