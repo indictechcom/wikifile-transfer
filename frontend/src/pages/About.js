@@ -50,7 +50,7 @@ function About() {
         <Typography variant="span">
           {t('source-code-text')}: {""}
         </Typography>
-        <Link href="https://github.com/your-repo-url" target="_blank" color="primary" underline="hover">
+        <Link href="https://github.com/indictechcom/wikifile-transfer" target="_blank" color="primary" underline="hover">
           {t('github')}
         </Link>
       </Box>
