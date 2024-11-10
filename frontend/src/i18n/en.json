@@ -54,5 +54,7 @@
     "enter-valid-project-language": "Please select a valid project and language",
     "target-file-name-invalid": "Target file name contains invalid characters",
     "target-file-name-exist": "Target file name already exists at target wiki",
-    "copy": "Copy"
+    "copy": "Copy",
+    "back": "Back",
+    "next": "Next"
 }
