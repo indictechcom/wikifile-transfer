@@ -35,6 +35,8 @@ function Upload() {
   const [error, setError] = useState(null);
   const [showResult, setShowResult] = useState(false);
 
+  const [skipUploadSelection, setSkipUploadSelection] = useState(false);
+
   const [sourceUrl, setSourceUrl] = useState("");
   const [project, setProject] = useState("");
   const [language, setLanguage] = useState("");
@@ -51,6 +53,11 @@ function Upload() {
 
   const handleNext = async () => {
     const isValid = await isStepValid();
+    if( activeStep === 0 && isValid === true && skipUploadSelection) {
+      setActiveStep(2);
+      return;
+    }
+
     if (activeStep === 2 && isValid === true) {
       handleUpload();
     } else if (isValid === true) {
@@ -268,6 +275,7 @@ function Upload() {
       setProject(response.data.data.project);
       setLanguage(response.data.data.lang);
       setAvailableLanguages(projects[response.data.data.project]);
+      setSkipUploadSelection(response.data.data.skip_upload_selection);
     });
   }, []);
 

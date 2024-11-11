@@ -55,6 +55,5 @@
     "target-file-name-invalid": "Target file name contains invalid characters",
     "target-file-name-exist": "Target file name already exists at target wiki",
     "copy": "Copy",
-    "back": "Back",
-    "next": "Next"
+    "skip-selection": "Skip project and language selection during the upload step."
 }
