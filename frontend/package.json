@@ -27,6 +27,8 @@
   "scripts": {
     "start": "react-scripts start",
     "build": "react-scripts build",
+    "build:cleanup": "rm -rf ../templates/index.html ../static/js  ../static/css ../static/media",
+    "build:toolforge": "react-scripts build && cp build/index.html ../templates/index.html && cp -r build/static/* ../static/",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
   },
