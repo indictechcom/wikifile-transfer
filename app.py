@@ -127,17 +127,20 @@ def preference():
 
         user_project = "wikipedia"
         user_lang = "en"
+        skip_upload_selection = False
 
         if user is not None:
             user_project = user.pref_project
             user_lang = user.pref_language
+            skip_upload_selection = user.skip_upload_selection
             
         return jsonify(
             {
                 "success": True,
                 "data": {
                     "project": user_project,
-                    "lang": user_lang
+                    "lang": user_lang,
+                    "skip_upload_selection": skip_upload_selection
                 },
                 "error": []
             }), 200
@@ -147,17 +150,24 @@ def preference():
         data = request.get_json()
         project = data.get('project')
         lang = data.get('lang')
+        skip_upload_selection = data.get('skip_upload_selection')
 
         # Add into database
         cur_username = MW_OAUTH.get_current_user(True)
         user = User.query.filter_by(username=cur_username).first()
 
         if user is None:
-            user = User(username=cur_username,pref_language=lang, pref_project=project)
+            user = User(
+                username=cur_username,
+                pref_language=lang,
+                pref_project=project,
+                skip_upload_selection=skip_upload_selection
+            )
             db.session.add(user)
         else:
             user.pref_language = lang
             user.pref_project = project
+            user.skip_upload_selection = skip_upload_selection
 
         try:
             db.session.commit()

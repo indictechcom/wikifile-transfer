@@ -8,6 +8,7 @@ class User(db.Model):
     pref_project = db.Column(db.String(15))
     pref_language = db.Column(db.String(4))
     user_language = db.Column(db.String(4), default='en')
+    skip_upload_selection = db.Column(db.Boolean, default=False)
 
     def __repr__(self):
         return '<User %r>' % self.username
