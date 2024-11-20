@@ -49,4 +49,11 @@
     "target-file-name-placeholder": "ਉਦਾਹਰਣ ABCD",
     "source-url-label": "ਸਰੋਤ ਯੂਆਰਐੱਲ ਦਰਜ ਕਰੋ",
     "target-file-name-label": "ਟੀਚਾ ਫ਼ਾਈਲ ਦਾ ਨਾਮ"
+    "upload-file-to-target-wiki": "ਟੀਚਾ ਵਿਕੀ ਤੇ ਫ਼ਾਈਲ ਚੜ੍ਹਾਓ",
+    "enter-valid-source-url": "ਕਿਰਪਾ ਕਰਕੇ ਇੱਕ ਵੈਧ ਸਰੋਤ ਯੂਆਰਐੱਲ ਦਰਜ ਕਰੋ",
+    "enter-valid-project-language": "ਕਿਰਪਾ ਕਰਕੇ ਵੈਧ ਪ੍ਰਾਜੈਕਟ ਅਤੇ ਭਾਸ਼ਾ ਚੁਣੋ",
+    "target-file-name-invalid": "ਟੀਚਾ ਫ਼ਾਈਲ ਨਾਮ ਵਿੱਚ ਅਵੈਧ ਅੱਖਰ ਸ਼ਾਮਲ ਹਨ",
+    "target-file-name-exist": "ਟੀਚਾ ਫ਼ਾਈਲ ਨਾਮ ਟੀਚਾ ਵਿਕੀ ਉੱਤੇ ਪਹਿਲਾਂ ਹੀ ਮੌਜੂਦ ਹੈ",
+    "copy": "ਨਕਲ",
+    "skip-selection": "ਅੱਪਲੋਡ ਪੜਾਅ ਦੌਰਾਨ ਪ੍ਰੋਜੈਕਟ ਅਤੇ ਭਾਸ਼ਾ ਦੀ ਚੋਣ ਨੂੰ ਛੱਡੋ।"
 }
