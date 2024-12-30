@@ -1,0 +1,28 @@
+{
+	"@metadata": {
+		"authors": [
+			"Milicevic01"
+		]
+	},
+	"home": "Почетна",
+	"upload": "Отпреми",
+	"about": "О",
+	"login": "Пријава",
+	"logout": "Одјава",
+	"source-code": "Изворни код доступан је на <0>{{github}}</0>",
+	"github": "GitHub",
+	"license": "Под лиценцом MIT",
+	"about-the-tool": "О алатки",
+	"learn-more": "Сазнајте више",
+	"tool-source": "Извор",
+	"authors": "Аутори",
+	"source-code-text": "Изворни код",
+	"back-to-home": "Назад на почетну",
+	"my-preferences": "Подешавања",
+	"select-project": "Изабери пројекат",
+	"select-language": "Изаберите језик",
+	"select-project-and-language": "Изаберите пројекат и језик",
+	"add-template": "Додај шаблон",
+	"go-back-to-home": "Назад на почетну",
+	"copy": "Копирај"
+}

@@ -1,0 +1,20 @@
+{
+	"@metadata": {
+		"authors": [
+			"Beta16"
+		]
+	},
+	"home": "Pagina principale",
+	"login": "Accedi",
+	"logout": "Esci",
+	"about-the-tool": "Informazioni sullo strumento",
+	"learn-more": "Ulteriori informazioni",
+	"authors": "Autori",
+	"select-project": "Seleziona progetto",
+	"select-language": "Seleziona lingua",
+	"content-not-found": "Contenuto non trovato per il file caricato.",
+	"fetch-content-error": "Si è verificato un errore durante il recupero del contenuto della pagina.",
+	"target-file-name-label": "Nome del file di destinazione",
+	"target-file-name-exist": "Il nome del file di destinazione esiste già nel wiki di destinazione",
+	"skip-selection": "Salta la selezione del progetto e della lingua durante la fase di caricamento."
+}
