@@ -1,6 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
+			"Nemoralis",
 			"Şeyx Şamil"
 		]
 	},
@@ -48,9 +49,9 @@
 	"target-file-name-placeholder": "Məs: ABCD",
 	"source-url-label": "Mənbə linkini daxil edin",
 	"target-file-name-label": "Hədəf faylının adı",
-	"upload-file-to-target-wiki": "Faylı hədəf vikiyə yükləyin",
-	"enter-valid-source-url": "Lütfən, etibarlı mənbə linki daxil edin",
-	"enter-valid-project-language": "Lütfən, etibarlı layihə və dil seçin",
+	"upload-file-to-target-wiki": "Faylı hədəf vikiyə yüklə",
+	"enter-valid-source-url": "Zəhmət olmasa, etibarlı mənbə linki daxil edin",
+	"enter-valid-project-language": "Zəhmət olmasa, etibarlı layihə və dil seçin",
 	"target-file-name-invalid": "Hədəf fayl adı uyğunsuz simvollar ehtiva edir",
 	"target-file-name-exist": "Hədəf fayl adı artıq hədəf vikidə mövcuddur",
 	"copy": "Kopyala",
