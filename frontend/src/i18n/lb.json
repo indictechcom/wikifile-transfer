@@ -1,6 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
+			"Robby",
 			"Volvox"
 		]
 	},
@@ -12,14 +13,17 @@
 	"logout": "Ausloggen",
 	"source-code": "De Quellcode ass op <0>{{github}}</0> disponibel",
 	"github": "GitHub",
+	"license": "Lizenzéiert ënner MIT",
 	"login-to-upload-images": "Loggt Iech a fir Biller eropzelueden",
 	"start-uploading": "Ufänke mat eroplueden",
+	"about-the-tool": "Iwwer dëst Geschier",
 	"learn-more": "Méi gewuer ginn",
 	"tool-source": "Quell",
 	"authors": "Auteuren",
 	"source-code-text": "Quellcode",
 	"404-heading": "Ups! Säit net fonnt",
 	"404-text": "D'Säit, no där Dir gesicht hutt, gëtt et net, se huet hiren Numm geännert oder se ass temporär net disponibel.",
+	"back-to-home": "Zréck op d'Haaptsäit",
 	"my-preferences": "Meng Astellungen",
 	"preferences-saved": "Astellungen erfollegräich gespäichert",
 	"select-project": "Projet eraussichen",
@@ -32,6 +36,7 @@
 	"upload-error": "Beim Eroplueden ass e Feeler geschitt.",
 	"edit-error": "Beim Ännere vun der Säit ass e Feeler geschitt.",
 	"invalid-source-url": "Ongülteg Source-URL. Déi néideg Parametere konnten net extrahéiert ginn.",
+	"finish-with-edit": "Ännerung fäerdeg maachen",
 	"view-wiki-page": "Wikisäit weisen",
 	"go-back-to-home": "Zréck op d'Haaptsäit",
 	"source-url-placeholder": "Z.&nbsp;B. https://en.wikipedia.org/wiki/File:ABCD.jpg",
