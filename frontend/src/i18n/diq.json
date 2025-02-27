@@ -1,0 +1,33 @@
+{
+	"@metadata": {
+		"authors": [
+			"GolyatGeri"
+		]
+	},
+	"home": "Keye",
+	"upload": "Barkerê",
+	"preference": "Tercihi",
+	"about": "Derheq",
+	"login": "Cıkewtış",
+	"logout": "Veciyayış",
+	"source-code": "Çımey kodi adresê <0>{{github}}</0> de est o",
+	"github": "GitHub",
+	"license": "MIT binaya lisans biya",
+	"login-to-upload-images": "resimi bar kerdışi rê  cıkewe",
+	"about-the-tool": "Hava halet",
+	"learn-more": "Tayêna bımuse",
+	"tool-source": "Menba",
+	"authors": "Nustekar",
+	"source-code-text": "Kodê çımeyi",
+	"404-heading": "Oops! Perla nêvineyê",
+	"back-to-home": "Şo pera keyi",
+	"my-preferences": "Tercihê mı",
+	"add-template": "Şabloni dekerê",
+	"view-wiki-page": "Perla wiki bımocne",
+	"go-back-to-home": "Peyser şo Keye",
+	"source-url-placeholder": "mesela. https://en.wikipedia.org/wiki/File:ABCD.jpg",
+	"target-file-name-placeholder": "Mesela ABCD",
+	"source-url-label": "Çıme GURNE cıkere",
+	"target-file-name-label": "Namey hedef dosyay",
+	"copy": "Kopya kerê"
+}
