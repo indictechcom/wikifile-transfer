@@ -36,6 +36,7 @@
 	"upload-error": "Beim Eroplueden ass e Feeler geschitt.",
 	"edit-error": "Beim Ännere vun der Säit ass e Feeler geschitt.",
 	"invalid-source-url": "Ongülteg Source-URL. Déi néideg Parametere konnten net extrahéiert ginn.",
+	"finish-without-edit": "Ofschléissen ouni z'änneren",
 	"finish-with-edit": "Ännerung fäerdeg maachen",
 	"view-wiki-page": "Wikisäit weisen",
 	"go-back-to-home": "Zréck op d'Haaptsäit",
@@ -45,6 +46,8 @@
 	"target-file-name-label": "Numm vum Zilfichier",
 	"upload-file-to-target-wiki": "Fichier op d'Zilwiki eroplueden",
 	"enter-valid-source-url": "Gitt wgl. eng gülteg Quell-URL an",
+	"enter-valid-project-language": "Sicht wgl. e valabel Projet an eng Sprooch eraus",
 	"target-file-name-exist": "Zilfichier gëtt et schonn an der Zilwiki",
-	"copy": "Kopéieren"
+	"copy": "Kopéieren",
+	"skip-selection": "D'Eraussiche vu Projet a Sprooch beim Eroplueden iwwersprangen."
 }
