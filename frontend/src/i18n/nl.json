@@ -1,7 +1,8 @@
 {
 	"@metadata": {
 		"authors": [
-			"ABPMAB"
+			"ABPMAB",
+			"Siebrand"
 		]
 	},
 	"home": "Startpagina",
@@ -10,7 +11,12 @@
 	"about": "Over",
 	"login": "Inloggen",
 	"logout": "Uitloggen",
+	"source-code": "Broncode is beschikbaar op <0>{{github}}</0>",
 	"github": "GitHub",
+	"license": "Gelicentieerd onder MIT",
+	"tool-info1": "Welkom op de pagina van Wikifile-transfer! Met dit hulpprogramma kunt u eenvoudig niet-vrije afbeeldingen overzetten tussen verschillende Wikimedia-projecten. Of u nu bestanden verplaatst voor onderhoud, consolidatie of een ander doel, dit hulpprogramma stroomlijnt het proces.",
+	"tool-info2": "Wikifile Transfer, ontwikkeld door de Indic-TechCom, helpt gebruikers bij het overbrengen van niet-vrije afbeeldingen van het ene wiki-project naar het andere binnen het Wikimedia-ecosysteem. Het vereenvoudigt het proces door gebruikers in staat te stellen een bron-URL, doelproject en taal te selecteren en een doelbestandsnaam op te geven. Dit hulpprogramma is met name handig voor Wikimedia-bijdragers die media beheren in wiki's met meerdere talen.",
+	"login-to-upload-images": "Meld u aan om afbeeldingen te uploaden",
 	"start-uploading": "Begin met uploaden",
 	"about-the-tool": "Over dit hulpmiddel",
 	"learn-more": "Meer weten",
@@ -18,6 +24,7 @@
 	"authors": "Auteurs",
 	"source-code-text": "Broncode",
 	"404-heading": "Oeps! Pagina niet gevonden",
+	"404-text": "De pagina die u zoekt bestaat niet, is van naam veranderd of is tijdelijk niet beschikbaar.",
 	"back-to-home": "Terug naar de startpagina",
 	"my-preferences": "Mijn voorkeuren",
 	"preferences-saved": "Voorkeuren succesvol opgeslagen",
@@ -25,12 +32,15 @@
 	"select-language": "Taal selecteren",
 	"enter-source-url": "Voer bron-URL in",
 	"select-project-and-language": "Selecteer project en taal",
+	"name-of-target-file": "Naam van het doelbestand",
 	"add-template": "Sjabloon toevoegen",
 	"complete-all-fields": "Vul alle vereiste velden in.",
 	"upload-error": "Er is een fout opgetreden tijdens het uploaden.",
 	"edit-error": "Er is een fout opgetreden tijdens het bewerken van de pagina.",
+	"poll-error": "Fout bij het controleren van de taakstatus: {{pollError}}",
 	"content-not-found": "Inhoud niet gevonden voor het geüploade bestand.",
 	"fetch-content-error": "Er is een fout opgetreden tijdens het ophalen van de inhoud van de pagina.",
+	"invalid-source-url": "Ongeldige bron-URL. Vereiste parameters konden niet worden geëxtraheerd.",
 	"finish-without-edit": "Voltooien zonder bewerken",
 	"finish-with-edit": "Voltooien met bewerken",
 	"view-wiki-page": "Wikipagina bekijken",
@@ -42,6 +52,8 @@
 	"upload-file-to-target-wiki": "Upload bestand naar doelwiki",
 	"enter-valid-source-url": "Voer een geldige bron-URL in",
 	"enter-valid-project-language": "Selecteer een geldig project en taal",
+	"target-file-name-invalid": "Doelbestandsnaam bevat ongeldige tekens",
+	"target-file-name-exist": "Doelbestandsnaam bestaat al op doelwiki",
 	"copy": "Kopiëren",
 	"skip-selection": "Sla de project- en taalselectie over tijdens de uploadstap."
 }
