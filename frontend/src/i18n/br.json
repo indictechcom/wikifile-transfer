@@ -1,0 +1,27 @@
+{
+	"@metadata": {
+		"authors": [
+			"Adriendelucca"
+		]
+	},
+	"home": "Degemer",
+	"upload": "Enporzhiañ",
+	"preference": "Penndibaboù",
+	"about": "Diwar-benn",
+	"login": "Kennaskañ",
+	"logout": "Digennaskañ",
+	"github": "GitHub",
+	"about-the-tool": "Diwar-benn an ostilh-mañ",
+	"learn-more": "Gouzout hiroc'h",
+	"tool-source": "Mammenn",
+	"authors": "Aozerien",
+	"source-code-text": "Kod mammenn",
+	"404-heading": "Chaous! N'eo ket bet kavet ar bajenn",
+	"back-to-home": "Distreiñ d'ar bajenn degemer",
+	"my-preferences": "Ma fenndibaboù",
+	"select-language": "Dibab ar yezh",
+	"go-back-to-home": "Distreiñ d'ar bajenn degemer",
+	"source-url-placeholder": "Da skouer: https://en.wikipedia.org/wiki/File:ABCD.jpg",
+	"target-file-name-placeholder": "Da skouer: ABCD",
+	"copy": "Eilañ"
+}
