@@ -1,6 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
+			"Amire80",
 			"YaronSh"
 		]
 	},
@@ -11,7 +12,7 @@
 	"login": "כניסה",
 	"logout": "יציאה",
 	"source-code": "קוד המקור זמין ב־<0>{{github}}</0>",
-	"github": "",
+	"github": "גיטהאב",
 	"license": "כפוף לרישיון MIT",
 	"tool-info1": "ברוך בואך לדף הכלי Wikifile-transfer! הכלי הזה מאפשר לך להעביר בקלות תמונות לא חופשיות בין מיזמים שונים של ויקימדיה. בין אם העברת הקבצים היא למטרות תחזוקה, אחידות או כל מטרה אחרת, הכלי הזה מפשט את התהליך.",
 	"tool-info2": "הכלי להעברת קובצי ויקי, פותח על ידי Indic-TechCom, מסייע למשתמשים להעביר תמונות לא חופשיות ממיזם ויקי אחד למשנהו בתוך משפחת מיזמי ויקימדיה. הוא מפשט את התהליך על ידי מתן האפשרות למשתמשים לבחור את כתובת המקור, מיזם היעד, שפה וציון שם קובץ היעד. הכלי הזה שימושי במיוחד למתנדבי ויקימדיה שמנהלים מדיה באתרי ויקי במגוון שפות.",
@@ -33,16 +34,16 @@
 	"select-project-and-language": "נא לבחור מיזם ושפה",
 	"name-of-target-file": "שם קובץ היעד",
 	"add-template": "הוספת תבנית",
-	"complete-all-fields": "נא להשלים את כל שדות החובה.",
+	"complete-all-fields": "נא למלא את כל שדות החובה.",
 	"upload-error": "אירעה שגיאה במהלך ההעלאה.",
 	"edit-error": "אירעה שגיאה במהלך עריכת הדף.",
 	"poll-error": "שגיאה בתשאול מצב המשימה: {{pollError}}",
 	"content-not-found": "לא נמצא תוכן לקובץ שהועלה.",
-	"fetch-content-error": "שגיאה במשיכת תוכן הדף.",
+	"fetch-content-error": "אירעה שגיאה במהלך שליפת תוכן הדף.",
 	"invalid-source-url": "כתובת המקור שגויה. נא לניתן לחלץ את המשתנים הנחוצים.",
 	"finish-without-edit": "סיום ללא עריכה",
 	"finish-with-edit": "סיום עם עריכה",
-	"view-wiki-page": "הצגת דף ויקי",
+	"view-wiki-page": "צפייה בדף ויקי",
 	"go-back-to-home": "חזרה לדף הבית",
 	"source-url-placeholder": "למשל: https://en.wikipedia.org/wiki/File:ABCD.jpg",
 	"target-file-name-placeholder": "למשל: ABCD",
@@ -50,7 +51,7 @@
 	"target-file-name-label": "שם קובץ היעד",
 	"upload-file-to-target-wiki": "העלאת קובץ לוויקי היעד",
 	"enter-valid-source-url": "נא למלא כתובת מקור תקפה",
-	"enter-valid-project-language": "נא לבחור מיזם ושפה תקפים",
+	"enter-valid-project-language": "נא לבחור מיזם ושפה תקינים",
 	"target-file-name-invalid": "שם קובץ היעד מכיל תווים שגויים",
 	"target-file-name-exist": "שם קובץ היעד כבר קיים בוויקי היעד",
 	"copy": "העתקה",
