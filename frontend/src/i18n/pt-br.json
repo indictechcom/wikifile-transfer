@@ -1,0 +1,26 @@
+{
+	"@metadata": {
+		"authors": [
+			"Eduardoaddad"
+		]
+	},
+	"home": "Início",
+	"upload": "Enviar",
+	"preference": "Preferências",
+	"about": "Sobre",
+	"login": "Entrar",
+	"logout": "Sair",
+	"source-code": "O código-fonte está disponível no <0>{{github}}</0>",
+	"github": "GitHub",
+	"license": "Licenciado sob MIT.",
+	"learn-more": "Saiba mais",
+	"tool-source": "Fonte",
+	"authors": "Autores",
+	"source-code-text": "Código-fonte",
+	"back-to-home": "Voltar à página inicial",
+	"my-preferences": "Minhas preferências",
+	"select-project": "Selecionar projeto",
+	"select-language": "Selecionar idioma",
+	"add-template": "Adicionar predefinição",
+	"copy": "Copiar"
+}
