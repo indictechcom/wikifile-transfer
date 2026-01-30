@@ -2,6 +2,9 @@ from celeryWorker import app
 import requests
 import requests_oauthlib
 import os
+import logging
+
+logger = logging.getLogger(__name__)
 
 @app.task(bind=True)
 def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj):

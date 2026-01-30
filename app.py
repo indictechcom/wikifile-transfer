@@ -17,6 +17,7 @@ import logging
 from celeryWorker import app as celery_app
 from tasks import upload_image_task
 from celery.result import AsyncResult
+from logging_config import setup_logging
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -27,6 +28,7 @@ app = Flask(__name__)
 # Load configuration from YAML file
 __dir__ = os.path.dirname(__file__)
 app.config.update(yaml.safe_load(open(os.path.join(__dir__, 'config.yaml'))))
+setup_logging(app)
 
 # Get variables
 ENV = app.config['ENV']
