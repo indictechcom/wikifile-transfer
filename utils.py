@@ -1,10 +1,15 @@
+import os
+import logging
 import datetime
 import requests
 import mwparserfromhell
 from templatelist import TEMPLATES
 
+logger = logging.getLogger(__name__)
+
+
 def download_image(src_project, src_lang, src_filename):
-    src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
+    src_endpoint = "https://" + src_lang + "." + src_project + ".org/w/api.php"
 
     param = {
         "action": "query",
@@ -15,38 +20,60 @@ def download_image(src_project, src_lang, src_filename):
         "iilocalonly": 1
     }
 
-    page = requests.get(url=src_endpoint, params=param).json()['query']['pages']
-
     try:
-        image_url = list (page.values()) [0]["imageinfo"][0]["url"]
-    except KeyError:
+        response = requests.get(url=src_endpoint, params=param, timeout=30)
+        response.raise_for_status()
+        page = response.json()["query"]["pages"]
+        image_url = list(page.values())[0]["imageinfo"][0]["url"]
+    except (KeyError, IndexError, requests.RequestException) as e:
+        logger.error("Failed to get image info for %s: %s", src_filename, e)
         return None
 
-    # Create a unique file name based on time
-    current_time = str(datetime.datetime.now())
-    get_filename = current_time.replace(':', '_')
-    get_filename = get_filename.replace(' ', '_')
+    # Create a unique file name based on current timestamp
+    timestamp = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
 
-    # Download the Image File
-    r = requests.get(image_url, allow_redirects=True)
-    filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
-    open("temp_images/" + filename, 'wb').write(r.content)
+    try:
+        r = requests.get(image_url, allow_redirects=True, timeout=60)
+        r.raise_for_status()
+    except requests.RequestException as e:
+        logger.error("Failed to download image from %s: %s", image_url, e)
+        return None
+
+    content_type = r.headers.get("content-type", "")
+    if not content_type.startswith("image/"):
+        logger.error("Unexpected content-type received: %s", content_type)
+        return None
+
+    # Strip the 'image/' prefix and sanitize the extension
+    raw_ext = content_type.split("/")[-1].split(";")[0].strip()
+    ext = "".join(c for c in raw_ext if c.isalnum())
+    if not ext:
+        logger.error("Could not determine file extension from content-type: %s", content_type)
+        return None
+
+    filename = timestamp + "." + ext
+
+    with open(os.path.join("temp_images", filename), "wb") as f:
+        f.write(r.content)
 
     return filename
 
 
 def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
-    # API Parameter to get CSRF Token
     csrf_param = {
         "action": "query",
         "meta": "tokens",
         "format": "json"
     }
 
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
-    csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+    try:
+        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, timeout=30)
+        response.raise_for_status()
+        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+    except (KeyError, requests.RequestException) as e:
+        logger.error("Failed to get CSRF token from %s: %s", tr_endpoint, e)
+        return None
 
-    # API Parameter to upload the file
     upload_param = {
         "action": "upload",
         "filename": tr_filename + "." + src_fileext,
@@ -55,18 +82,24 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         "ignorewarnings": 1
     }
 
-    # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
+    try:
+        with open(file_path, "rb") as f:
+            response = requests.post(
+                url=tr_endpoint,
+                files={"file": f},
+                data=upload_param,
+                auth=ses,
+                timeout=120
+            ).json()
+    except (OSError, requests.RequestException) as e:
+        logger.error("Upload request failed for %s: %s", file_path, e)
+        return None
 
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
-
-    # Try block to get Link and URL
     try:
         wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
         file_link = response["upload"]["imageinfo"]["url"]
     except KeyError:
+        logger.error("Unexpected upload response structure: %s", response)
         return None
 
     return {
@@ -94,7 +127,11 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                     }
 
                     try:
-                        response = requests.get(url=src_endpoint, params=lang_param)
+                        response = requests.get(
+                            url=src_endpoint,
+                            params=lang_param,
+                            timeout=30
+                        )
                         response.raise_for_status()
                         langlinks = response.json()["query"]["pages"][0]["langlinks"]
 
@@ -102,13 +139,15 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                             if langlink["lang"] == target_lang:
                                 template.add("Article", langlink["title"])
                                 break
-                    except:
+                    except (KeyError, IndexError, requests.RequestException) as e:
+                        logger.warning("Could not localize template article link: %s", e)
                         return str(wikicode)
 
     return str(wikicode)
 
+
 def getHeader():
-    agent = 'Wikifile-transfer/1.0 (https://wikifile-transfer.toolforge.org; 0freerunning@gmail.com)'
+    agent = "Wikifile-transfer/1.0 (https://wikifile-transfer.toolforge.org; 0freerunning@gmail.com)"
     return {
-        'User-Agent': agent
+        "User-Agent": agent
     }
