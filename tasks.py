@@ -1,7 +1,11 @@
-from celeryWorker import app
+import os
+import logging
 import requests
 import requests_oauthlib
-import os
+from celeryWorker import app
+
+logger = logging.getLogger(__name__)
+
 
 @app.task(bind=True)
 def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj):
@@ -12,7 +16,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         resource_owner_secret=OAuthObj["secret"]
     )
     self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100})
-    
+
     # API Parameter to get CSRF Token
     csrf_param = {
         "action": "query",
@@ -20,39 +24,47 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         "format": "json"
     }
 
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
-    csrf_token = response.json()["query"]["tokens"]["csrftoken"]
-
-    self.update_state(state='PROGRESS', meta={'current': 25, 'total': 100})
-
-    # API Parameter to upload the file
-    upload_param = {
-        "action": "upload",
-        "filename": tr_filename + "." + src_fileext,
-        "format": "json",
-        "token": csrf_token,
-        "ignorewarnings": 1
-    }
-
-    # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
-
-    self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
-
-    # Try block to get Link and URL
     try:
-        wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
-        file_link = response["upload"]["imageinfo"]["url"]
-    except KeyError:
-        return {"success": False, "data": {}, "errors": ["Upload failed"]}
+        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
+        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
-    self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100})
+        self.update_state(state='PROGRESS', meta={'current': 25, 'total': 100})
 
-    return {
-        "wikipage_url": wikifile_url,
-        "file_link": file_link
-    }
+        # API Parameter to upload the file
+        upload_param = {
+            "action": "upload",
+            "filename": tr_filename + "." + src_fileext,
+            "format": "json",
+            "token": csrf_token,
+            "ignorewarnings": 1
+        }
+
+        # Read the file for POST request
+        file = {
+            'file': open(file_path, 'rb')
+        }
+
+        response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+
+        self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
+
+        # Try block to get Link and URL
+        try:
+            wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
+            file_link = response["upload"]["imageinfo"]["url"]
+        except KeyError:
+            return {"success": False, "data": {}, "errors": ["Upload failed"]}
+
+        self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100})
+
+        return {
+            "wikipage_url": wikifile_url,
+            "file_link": file_link
+        }
+
+    finally:
+        # Always remove the temp file once the task finishes, success or failure
+        try:
+            os.remove(file_path)
+        except OSError as e:
+            logger.warning("Could not remove temp file %s: %s", file_path, e)

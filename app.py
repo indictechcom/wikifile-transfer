@@ -85,13 +85,18 @@ def upload():
         # Authenticate Session
         ses = authenticated_session()
 
-        # Check whether we have enough data or not
-        if None not in (downloaded_filename, tr_filename, src_fileext, ses):
-            file_path = 'temp_images/' + downloaded_filename
-            file_size = os.path.getsize(file_path)
+        # If the file was downloaded but other required data is missing, clean up before returning
+        if None in (downloaded_filename, tr_filename, src_fileext, ses):
+            if downloaded_filename:
+                _delete_temp_file(os.path.join('temp_images', downloaded_filename))
+            return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
 
-            if file_size < 50 * 1024 * 1024:  # 50 MB
-                # Process synchronously
+        file_path = os.path.join('temp_images', downloaded_filename)
+        file_size = os.path.getsize(file_path)
+
+        if file_size < 50 * 1024 * 1024:  # 50 MB
+            # Process synchronously — clean up temp file when done regardless of outcome
+            try:
                 resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
                 if resp is None:
                     return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
@@ -103,18 +108,18 @@ def upload():
                     "data": resp,
                     "errors": []
                 }), 200
-            else:
-                # Process asynchronously using Celery
-                OAuthObj = {
-                    "consumer_key": CONSUMER_KEY,
-                    "consumer_secret": CONSUMER_SECRET,
-                    "key": session['mwoauth_access_token']['key'],
-                    "secret": session['mwoauth_access_token']['secret']
-                }
-                task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
-                return jsonify({"success": True, "task_id": task.id}), 202
+            finally:
+                _delete_temp_file(file_path)
         else:
-            return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
+            # Process asynchronously — the Celery task is responsible for cleaning up the file
+            OAuthObj = {
+                "consumer_key": CONSUMER_KEY,
+                "consumer_secret": CONSUMER_SECRET,
+                "key": session['mwoauth_access_token']['key'],
+                "secret": session['mwoauth_access_token']['secret']
+            }
+            task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
+            return jsonify({"success": True, "task_id": task.id}), 202
     else:
         return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
@@ -334,6 +339,13 @@ def get_task_status(task_id):
         response["error"] = str(task.result)
 
     return jsonify(response), 200
+
+
+def _delete_temp_file(file_path):
+    try:
+        os.remove(file_path)
+    except OSError as e:
+        logger.warning("Could not remove temp file %s: %s", file_path, e)
 
 
 def authenticated_session():
