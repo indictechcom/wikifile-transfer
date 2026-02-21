@@ -24,9 +24,11 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Load configuration from YAML file
+# Load configuration from YAML file (use test config when running under pytest)
 __dir__ = os.path.dirname(__file__)
-app.config.update(yaml.safe_load(open(os.path.join(__dir__, 'config.yaml'))))
+_config_file = 'config.test.yaml' if os.environ.get('WIKIFILE_TEST') else 'config.yaml'
+with open(os.path.join(__dir__, _config_file)) as f:
+    app.config.update(yaml.safe_load(f))
 
 # Get variables
 ENV = app.config['ENV']

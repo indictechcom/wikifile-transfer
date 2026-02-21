@@ -1,0 +1,10 @@
+ENV: dev
+SECRET_KEY: test-secret-key
+CONSUMER_KEY: test-consumer-key
+CONSUMER_SECRET: test-consumer-secret
+OAUTH_MWURI: https://meta.wikimedia.org/w
+SESSION_COOKIE_SECURE: False
+SESSION_REFRESH_EACH_REQUEST: False
+PREFERRED_URL_SCHEME: http
+SQLALCHEMY_DATABASE_URI: "sqlite:///:memory:"
+SQLALCHEMY_TRACK_MODIFICATIONS: False
