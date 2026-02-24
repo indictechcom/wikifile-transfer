@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
+from flask import send_from_directory
 from flask import Flask, request, session, jsonify, render_template
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
@@ -10,7 +10,7 @@ import requests_oauthlib
 import requests
 import os
 import yaml
-import re
+import re 
 import urllib.parse
 from model import db, User
 import logging
@@ -56,9 +56,14 @@ app.register_blueprint(MW_OAUTH.bp)
 
 @app.route('/index', methods=['GET'])
 @app.route("/")
-def index():
-    return render_template('index.html')
+# def index():
+#     return render_template('index.html')
+def serve():
+    return send_from_directory("frontend/build", "index.html")
 
+@app.route("/static/<path:path>")
+def serve_static(path):
+    return send_from_directory("frontend/build/static", path)
 
 @app.route('/api/upload', methods=['POST'])
 def upload():
