@@ -32,9 +32,11 @@ def download_image(src_project, src_lang, src_filename):
     except KeyError:
         return None
 
+    # Create a unique file name based on time
     current_time = str(datetime.datetime.now())
     get_filename = current_time.replace(':', '_').replace(' ', '_')
 
+    # Download the Image File
     r = requests.get(image_url, allow_redirects=True, headers=headers)
     filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
     
@@ -44,6 +46,7 @@ def download_image(src_project, src_lang, src_filename):
     return filename
 
 def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
+    # API Parameter to get CSRF Token
     csrf_param = {
         "action": "query",
         "meta": "tokens",
@@ -52,9 +55,11 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
 
     headers = getHeader()
 
+    # Get CSRF Token with proper headers
     response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=headers)
     csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
+    # API Parameter to upload the file
     upload_param = {
         "action": "upload",
         "filename": tr_filename + "." + src_fileext,
@@ -63,8 +68,10 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         "ignorewarnings": 1
     }
 
+    # Read the file for POST request
     with open(file_path, 'rb') as f:
         file_payload = {'file': f}
+        # Final upload POST with proper headers
         response = requests.post(url=tr_endpoint, files=file_payload, data=upload_param, auth=ses, headers=headers).json()
 
     try:
@@ -107,6 +114,6 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                                 template.add("Article", langlink["title"])
                                 break
                     except:
-                        continue 
+                        continue # Continue to next template if this one fails
 
     return str(wikicode)
