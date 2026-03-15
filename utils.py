@@ -15,11 +15,16 @@ def download_image(src_project, src_lang, src_filename):
         "iilocalonly": 1
     }
 
-    page = requests.get(url=src_endpoint, params=param).json()['query']['pages']
+    try:
+        response = requests.get(url=src_endpoint, params=param)
+        response.raise_for_status()
+        page = response.json()['query']['pages']
+    except (requests.exceptions.RequestException, KeyError, ValueError):
+        return None
 
     try:
         image_url = list (page.values()) [0]["imageinfo"][0]["url"]
-    except KeyError:
+    except (KeyError, IndexError):
         return None
 
     # Create a unique file name based on time
@@ -28,9 +33,14 @@ def download_image(src_project, src_lang, src_filename):
     get_filename = get_filename.replace(' ', '_')
 
     # Download the Image File
-    r = requests.get(image_url, allow_redirects=True)
-    filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
-    open("temp_images/" + filename, 'wb').write(r.content)
+    try:
+        r = requests.get(image_url, allow_redirects=True)
+        r.raise_for_status()
+        filename = get_filename + "." + r.headers.get('content-type', 'image/jpeg').replace('image/', '')
+        with open("temp_images/" + filename, 'wb') as f:
+            f.write(r.content)
+    except (requests.exceptions.RequestException, IOError):
+        return None
 
     return filename
 
@@ -43,8 +53,12 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         "format": "json"
     }
 
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
-    csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+    try:
+        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
+        response.raise_for_status()
+        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+    except (requests.exceptions.RequestException, KeyError, ValueError):
+        return None
 
     # API Parameter to upload the file
     upload_param = {
@@ -56,16 +70,19 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     }
 
     # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    try:
+        with open(file_path, 'rb') as f:
+            file = {'file': f}
+            response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses)
+            response.raise_for_status()
+            resp_json = response.json()
+    except (requests.exceptions.RequestException, ValueError, IOError):
+        return None
 
     # Try block to get Link and URL
     try:
-        wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
-        file_link = response["upload"]["imageinfo"]["url"]
+        wikifile_url = resp_json["upload"]["imageinfo"]["descriptionurl"]
+        file_link = resp_json["upload"]["imageinfo"]["url"]
     except KeyError:
         return None
 
