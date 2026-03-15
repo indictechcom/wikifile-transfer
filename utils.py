@@ -10,6 +10,20 @@ logger = get_logger(__name__)
 import os
 import datetime
 import requests
+
+
+def cleanup_temp_file(file_path):
+    """Remove a temp file from disk. Silently ignores missing files."""
+    if not file_path:
+        return
+    try:
+        if os.path.exists(file_path):
+            os.remove(file_path)
+            logger.info(f"Cleaned up temp file: {file_path}")
+    except OSError as e:
+        logger.warning(f"Failed to remove temp file {file_path}: {e}")
+
+
 def download_image(src_project, src_lang, src_filename):
     """
     Download an image from a Wiki source.
@@ -162,17 +176,19 @@ def download_image(src_project, src_lang, src_filename):
         ) from e
 
     except OSError as e:
+        partial = file_path if "file_path" in locals() else None
+        cleanup_temp_file(partial)
         log_file_operation(
             logger,
             operation="write",
-            file_path=file_path if "file_path" in locals() else "unknown",
+            file_path=partial or "unknown",
             success=False,
             error=str(e)
         )
         raise FileOperationError(
             f"Failed to write image file: {str(e)}",
             operation="write",
-            file_path=file_path if "file_path" in locals() else "unknown"
+            file_path=partial or "unknown"
         ) from e
 
 
