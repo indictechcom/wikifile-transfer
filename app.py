@@ -4,7 +4,7 @@ from flask import send_from_directory
 from flask import Flask, request, session, jsonify
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
-from utils import download_image, get_localized_wikitext, getHeader, process_upload
+from utils import download_image, get_localized_wikitext, getHeader, process_upload, cleanup_temp_file
 from flask_cors import CORS
 import requests_oauthlib
 import requests
@@ -104,43 +104,51 @@ def upload():
             file_path=src_filename
         )
 
-    # Validate target wiki fields
-    tr_project = data.get('trproject')
-    tr_lang = data.get('trlang')
-    tr_filename = data.get('trfilename')
-
-    if not all([tr_project, tr_lang, tr_filename]):
-        raise ValidationError("trproject, trlang, and trfilename are all required")
-
-    tr_filename = urllib.parse.unquote(tr_filename)
-    tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
-
-    # Require authenticated session before proceeding
-    ses = authenticated_session()
-    if ses is None:
-        raise AuthenticationError("You must be logged in to upload files")
-
     file_path = 'temp_images/' + downloaded_filename
-    file_size = os.path.getsize(file_path)
+    handed_off_to_task = False
 
-    if file_size < 50 * 1024 * 1024:  # files under 50 MB upload synchronously
-        resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
-        if resp is None:
-            raise UploadError("Upload to target wiki failed", upload_type="sync")
+    try:
+        # Validate target wiki fields
+        tr_project = data.get('trproject')
+        tr_lang = data.get('trlang')
+        tr_filename = data.get('trfilename')
 
-        resp["source"] = src_url
-        return success_response(data=resp)
+        if not all([tr_project, tr_lang, tr_filename]):
+            raise ValidationError("trproject, trlang, and trfilename are all required")
 
-    else:
-        # Files over 50 MB are queued as a Celery async task
-        OAuthObj = {
-            "consumer_key": CONSUMER_KEY,
-            "consumer_secret": CONSUMER_SECRET,
-            "key": session['mwoauth_access_token']['key'],
-            "secret": session['mwoauth_access_token']['secret']
-        }
-        task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
-        return success_response(data={"task_id": task.id}, status_code=202)
+        tr_filename = urllib.parse.unquote(tr_filename)
+        tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
+
+        # Require authenticated session before proceeding
+        ses = authenticated_session()
+        if ses is None:
+            raise AuthenticationError("You must be logged in to upload files")
+
+        file_size = os.path.getsize(file_path)
+
+        if file_size < 50 * 1024 * 1024:  # files under 50 MB upload synchronously
+            resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+            if resp is None:
+                raise UploadError("Upload to target wiki failed", upload_type="sync")
+
+            resp["source"] = src_url
+            return success_response(data=resp)
+
+        else:
+            # Files over 50 MB are queued as a Celery async task — the task owns cleanup
+            OAuthObj = {
+                "consumer_key": CONSUMER_KEY,
+                "consumer_secret": CONSUMER_SECRET,
+                "key": session['mwoauth_access_token']['key'],
+                "secret": session['mwoauth_access_token']['secret']
+            }
+            task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
+            handed_off_to_task = True
+            return success_response(data={"task_id": task.id}, status_code=202)
+
+    finally:
+        if not handed_off_to_task:
+            cleanup_temp_file(file_path)
 
 
 @app.route('/api/preference', methods=['GET', 'POST'])
