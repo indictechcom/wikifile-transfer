@@ -5,7 +5,7 @@ import requests_oauthlib
 import os
 from logging_config import get_logger, log_exception, log_task_event, log_timed_api_call, log_file_operation
 from exceptions import AuthenticationError, WikiAPIError, FileOperationError
-from utils import getHeader
+from utils import getHeader, cleanup_temp_file
 
 logger = get_logger(__name__)
 
@@ -23,6 +23,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
     """
     task_id = self.request.id
     full_filename = f"{tr_filename}.{src_fileext}"
+    _should_cleanup = True  # set False only before self.retry() so file survives retries
 
     logger.info(f"Task {task_id}: starting upload for {full_filename}")
     log_task_event(
@@ -102,6 +103,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
             error_msg = "Timeout while fetching CSRF token"
             logger.error(f"Task {task_id}: {error_msg}")
             if self.request.retries < self.max_retries:
+                _should_cleanup = False
                 raise self.retry(exc=e)
             log_task_event(logger, task_id=task_id, task_name="upload_image_task",
                            status="failed", error=error_msg)
@@ -111,6 +113,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
             error_msg = f"Failed to fetch CSRF token: {str(e)}"
             log_exception(logger, e, extra_context={"task_id": task_id, "step": "fetch_csrf_token"})
             if self.request.retries < self.max_retries:
+                _should_cleanup = False
                 raise self.retry(exc=e)
             log_task_event(logger, task_id=task_id, task_name="upload_image_task",
                            status="failed", error=error_msg)
@@ -176,6 +179,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
             log_file_operation(logger, "upload", file_path, success=False, error=error_msg)
             logger.error(f"Task {task_id}: {error_msg}")
             if self.request.retries < self.max_retries:
+                _should_cleanup = False
                 raise self.retry(exc=e)
             log_task_event(logger, task_id=task_id, task_name="upload_image_task",
                            status="failed", error=error_msg)
@@ -186,6 +190,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
             log_exception(logger, e, extra_context={"task_id": task_id, "step": "upload_file"})
             log_file_operation(logger, "upload", file_path, success=False, error=str(e))
             if self.request.retries < self.max_retries:
+                _should_cleanup = False
                 raise self.retry(exc=e)
             log_task_event(logger, task_id=task_id, task_name="upload_image_task",
                            status="failed", error=error_msg)
@@ -238,3 +243,9 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         log_task_event(logger, task_id=task_id, task_name="upload_image_task",
                        status="failed", error=error_msg)
         return {"success": False, "data": {}, "errors": [error_msg]}
+
+    finally:
+        # Clean up the temp file on any terminal outcome (success or final failure).
+        # Skipped when self.retry() is raised so the file survives to the next attempt.
+        if _should_cleanup:
+            cleanup_temp_file(file_path)
