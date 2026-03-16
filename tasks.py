@@ -35,11 +35,9 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
     }
 
     # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    with open(file_path, 'rb') as f:
+        file = {'file': f}
+        response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
 
     self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
 

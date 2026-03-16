@@ -174,7 +174,7 @@ def preference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception:
             db.session.rollback()
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
@@ -216,7 +216,7 @@ def languagePreference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception:
             db.session.rollback()
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
@@ -260,7 +260,7 @@ def get_wikitext():
             return jsonify({"wikitext": wikitext}), 200
         else:
             return jsonify({"wikitext": ""}), 200
-    except:
+    except Exception:
         return jsonify({"wikitext": ""}), 200
 
 
