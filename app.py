@@ -4,7 +4,7 @@
 from flask import Flask, request, session, jsonify, render_template
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
-from utils import download_image, get_localized_wikitext, getHeader, process_upload
+from utils import download_image, get_localized_wikitext, getHeader, process_upload, cleanup_temp_file
 from flask_cors import CORS
 import requests_oauthlib
 import requests
@@ -63,38 +63,61 @@ def index():
 @app.route('/api/upload', methods=['POST'])
 def upload():
     if request.method == 'POST':
-        data = request.get_json()
-        src_url = urllib.parse.unquote(data.get('srcUrl'))
-        match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+        downloaded_filename = None
+        file_path = None
+        try:
+            data = request.get_json(silent=True)
+            if not data:
+                return jsonify({"success": False, "data": {}, "errors": ["Invalid JSON payload"]}), 400
 
-        src_project = match[0][1]
-        src_lang = match[0][0]
-        src_filename = src_url.split('/')[-1]
-        src_fileext = src_filename.split('.')[-1]
+            src_url = data.get('srcUrl')
+            if not src_url:
+                return jsonify({"success": False, "data": {}, "errors": ["Missing srcUrl"]}), 400
 
-        # Downloading the source file and getting saved file name
-        downloaded_filename = download_image(src_project, src_lang, src_filename)
+            src_url = urllib.parse.unquote(src_url)
+            match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
 
-        # Getting Target Details
-        tr_project = data.get('trproject')
-        tr_lang = data.get('trlang')
-        tr_filename = data.get('trfilename')
-        tr_filename = urllib.parse.unquote(tr_filename)
-        tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
+            if not match or len(match[0]) < 2:
+                return jsonify({"success": False, "data": {}, "errors": ["Invalid source URL format"]}), 400
 
-        # Authenticate Session
-        ses = authenticated_session()
+            src_project = match[0][1]
+            src_lang = match[0][0]
+            src_filename = src_url.split('/')[-1]
+            src_fileext = src_filename.split('.')[-1]
 
-        # Check whether we have enough data or not
-        if None not in (downloaded_filename, tr_filename, src_fileext, ses):
+            # Downloading the source file and getting saved file name
+            downloaded_filename = download_image(src_project, src_lang, src_filename)
+
+            if downloaded_filename is None:
+                return jsonify({"success": False, "data": {}, "errors": ["Failed to download source file"]}), 400
+
+            # Getting Target Details
+            tr_project = data.get('trproject')
+            tr_lang = data.get('trlang')
+            tr_filename = data.get('trfilename')
+
+            if not all([tr_project, tr_lang, tr_filename]):
+                cleanup_temp_file('temp_images/' + downloaded_filename)
+                return jsonify({"success": False, "data": {}, "errors": ["Missing target project, language, or filename"]}), 400
+
+            tr_filename = urllib.parse.unquote(tr_filename)
+            tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
+
+            # Authenticate Session
+            ses = authenticated_session()
+
+            if ses is None:
+                cleanup_temp_file('temp_images/' + downloaded_filename)
+                return jsonify({"success": False, "data": {}, "errors": ["User not authenticated. Please log in."]}), 401
+
             file_path = 'temp_images/' + downloaded_filename
             file_size = os.path.getsize(file_path)
 
             if file_size < 50 * 1024 * 1024:  # 50 MB
-                # Process synchronously
+                # Process synchronously (process_upload handles temp file cleanup)
                 resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
                 if resp is None:
-                    return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
+                    return jsonify({"success": False, "data": {}, "errors": ["Upload to target wiki failed. Check backend logs for details."]}), 500
 
                 resp["source"] = src_url
 
@@ -113,8 +136,17 @@ def upload():
                 }
                 task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
                 return jsonify({"success": True, "task_id": task.id}), 202
-        else:
-            return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
+
+        except KeyError as e:
+            logger.error("Missing key in upload request: %s", e)
+            if downloaded_filename:
+                cleanup_temp_file('temp_images/' + downloaded_filename)
+            return jsonify({"success": False, "data": {}, "errors": [f"Missing required field: {e}"]}), 400
+        except Exception as e:
+            logger.error("Unexpected error in /api/upload: %s", e, exc_info=True)
+            if downloaded_filename:
+                cleanup_temp_file('temp_images/' + downloaded_filename)
+            return jsonify({"success": False, "data": {}, "errors": ["Internal server error. Please try again."]}), 500
     else:
         return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
