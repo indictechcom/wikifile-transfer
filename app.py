@@ -24,9 +24,11 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Load configuration from YAML file
+# Load configuration from YAML file (use test config when running under pytest)
 __dir__ = os.path.dirname(__file__)
-app.config.update(yaml.safe_load(open(os.path.join(__dir__, 'config.yaml'))))
+_config_file = 'config.test.yaml' if os.environ.get('WIKIFILE_TEST') else 'config.yaml'
+with open(os.path.join(__dir__, _config_file)) as f:
+    app.config.update(yaml.safe_load(f))
 
 # Get variables
 ENV = app.config['ENV']
@@ -64,8 +66,11 @@ def index():
 def upload():
     if request.method == 'POST':
         data = request.get_json()
-        src_url = urllib.parse.unquote(data.get('srcUrl'))
+        src_url = urllib.parse.unquote(data.get('srcUrl') or '')
         match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+
+        if not match:
+            return jsonify({"success": False, "data": {}, "errors": ["Invalid source URL"]}), 400
 
         src_project = match[0][1]
         src_lang = match[0][0]
@@ -142,7 +147,7 @@ def preference():
                     "lang": user_lang,
                     "skip_upload_selection": skip_upload_selection
                 },
-                "error": []
+                "errors": []
             }), 200
 
     elif request.method == 'POST':
@@ -172,7 +177,7 @@ def preference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception:
             db.session.rollback()
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
@@ -195,7 +200,7 @@ def languagePreference():
                 "data": {
                     "user_language": user_language
                 },
-                "error": []
+                "errors": []
             }), 200
 
     elif request.method == 'POST':
@@ -214,7 +219,7 @@ def languagePreference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception:
             db.session.rollback()
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
@@ -258,7 +263,7 @@ def get_wikitext():
             return jsonify({"wikitext": wikitext}), 200
         else:
             return jsonify({"wikitext": ""}), 200
-    except:
+    except Exception:
         return jsonify({"wikitext": ""}), 200
 
 
@@ -270,6 +275,9 @@ def editPage():
         content = data.get('content')
 
         match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", targetUrl)
+
+        if not match:
+            return jsonify({"success": False, "data": {}, "errors": ["Invalid target URL"]}), 400
 
         target_project = match[0][1]
         target_lang = match[0][0]
@@ -287,8 +295,13 @@ def editPage():
             "format": "json"
         }
 
-        response = requests.get(url=target_endpoint, params=csrf_param, auth=ses)
-        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+        try:
+            response = requests.get(url=target_endpoint, params=csrf_param, auth=ses, timeout=30)
+            response.raise_for_status()
+            csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+        except Exception as e:
+            logger.error("Failed to fetch CSRF token for editPage: %s", e)
+            return jsonify({"success": False, "data": {}, "errors": ["Failed to get edit token"]}), 502
 
         # API Parameters to edit the page
         edit_params = {
@@ -299,7 +312,12 @@ def editPage():
             "appendtext": content
         }
 
-        response = requests.post(url=target_endpoint, data=edit_params, auth=ses)
+        try:
+            response = requests.post(url=target_endpoint, data=edit_params, auth=ses, timeout=30)
+            response.raise_for_status()
+        except Exception as e:
+            logger.error("editPage POST failed: %s", e)
+            return jsonify({"success": False, "data": {}, "errors": ["Edit Error"]}), 502
 
         if response.status_code == 200:
             return jsonify({ "success": True, "data": {}, "errors": []}), 200

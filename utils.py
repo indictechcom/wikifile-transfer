@@ -15,11 +15,11 @@ def download_image(src_project, src_lang, src_filename):
         "iilocalonly": 1
     }
 
-    page = requests.get(url=src_endpoint, params=param).json()['query']['pages']
+    page = requests.get(url=src_endpoint, params=param, timeout=30).json()['query']['pages']
 
     try:
-        image_url = list (page.values()) [0]["imageinfo"][0]["url"]
-    except KeyError:
+        image_url = list(page.values())[0]["imageinfo"][0]["url"]
+    except (KeyError, IndexError):
         return None
 
     # Create a unique file name based on time
@@ -28,9 +28,14 @@ def download_image(src_project, src_lang, src_filename):
     get_filename = get_filename.replace(' ', '_')
 
     # Download the Image File
-    r = requests.get(image_url, allow_redirects=True)
-    filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
-    open("temp_images/" + filename, 'wb').write(r.content)
+    r = requests.get(image_url, allow_redirects=True, timeout=60)
+    content_type = r.headers.get('content-type', '')
+    if not content_type.startswith('image/'):
+        return None
+    ext = content_type.split('image/')[-1].split(';')[0].strip()
+    filename = get_filename + "." + ext
+    with open("temp_images/" + filename, 'wb') as f:
+        f.write(r.content)
 
     return filename
 
@@ -43,7 +48,7 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         "format": "json"
     }
 
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
+    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, timeout=30)
     csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
     # API Parameter to upload the file
@@ -56,11 +61,9 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     }
 
     # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    with open(file_path, 'rb') as f:
+        file = {'file': f}
+        response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
 
     # Try block to get Link and URL
     try:
@@ -94,15 +97,18 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                     }
 
                     try:
-                        response = requests.get(url=src_endpoint, params=lang_param)
+                        response = requests.get(url=src_endpoint, params=lang_param, timeout=30)
                         response.raise_for_status()
-                        langlinks = response.json()["query"]["pages"][0]["langlinks"]
+                        pages = response.json().get("query", {}).get("pages", [])
+                        if not pages or "langlinks" not in pages[0]:
+                            continue
+                        langlinks = pages[0]["langlinks"]
 
                         for langlink in langlinks:
                             if langlink["lang"] == target_lang:
                                 template.add("Article", langlink["title"])
                                 break
-                    except:
+                    except Exception:
                         return str(wikicode)
 
     return str(wikicode)
