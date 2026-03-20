@@ -92,7 +92,13 @@ def upload():
 
             if file_size < 50 * 1024 * 1024:  # 50 MB
                 # Process synchronously
-                resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+
+                try:
+                    resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+                finally:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
+                    
                 if resp is None:
                     return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
 
