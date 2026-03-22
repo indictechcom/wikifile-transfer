@@ -4,7 +4,7 @@
 from flask import Flask, request, session, jsonify, render_template
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
-from utils import download_image, get_localized_wikitext, getHeader, process_upload
+from utils import download_image, get_localized_wikitext, get_headers, process_upload
 from flask_cors import CORS
 import requests_oauthlib
 import requests
@@ -49,7 +49,7 @@ MW_OAUTH = MWOAuth(
     base_url=BASE_URL,
     consumer_key=CONSUMER_KEY,
     consumer_secret=CONSUMER_SECRET,
-    user_agent= getHeader()['User-Agent']
+    user_agent= get_headers()['User-Agent']
 )
 app.register_blueprint(MW_OAUTH.bp)
 
