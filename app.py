@@ -45,13 +45,15 @@ db.init_app(app)
 migrate = Migrate(app, db)
 
 # Register blueprint to app
-MW_OAUTH = MWOAuth(
-    base_url=BASE_URL,
-    consumer_key=CONSUMER_KEY,
-    consumer_secret=CONSUMER_SECRET,
-    user_agent= getHeader()['User-Agent']
-)
-app.register_blueprint(MW_OAUTH.bp)
+MW_OAUTH = None
+if CONSUMER_KEY and CONSUMER_SECRET:
+    MW_OAUTH = MWOAuth(
+        base_url=BASE_URL,
+        consumer_key=CONSUMER_KEY,
+        consumer_secret=CONSUMER_SECRET,
+        user_agent=getHeader()['User-Agent']
+    )
+    app.register_blueprint(MW_OAUTH.bp)
 
 
 @app.route('/index', methods=['GET'])
@@ -312,9 +314,10 @@ def editPage():
 
 @app.route('/api/user', methods=['GET'])
 def get_base_variables():
+    username = MW_OAUTH.get_current_user(True) if MW_OAUTH is not None else None
     return jsonify({
         "logged": logged() is not None,
-        "username": MW_OAUTH.get_current_user(True)
+        "username": username
     }), 200
 
 @app.route('/api/task_status/<task_id>', methods=['GET'])
@@ -350,18 +353,17 @@ def authenticated_session():
 
 
 def db_user():
-    if logged():
+    if MW_OAUTH is not None and logged():
         user = User.query.filter_by(username=MW_OAUTH.get_current_user(True)).first()
         return user
-    else:
-        return None
+    return None
 
 
 def logged():
-    if MW_OAUTH.get_current_user(True) is not None:
-        return MW_OAUTH.get_current_user(True)
-    else:
+    if MW_OAUTH is None:
         return None
+    current_user = MW_OAUTH.get_current_user(True)
+    return current_user if current_user is not None else None
 
 
 if __name__ == "__main__":
