@@ -112,7 +112,14 @@ def upload():
                     "secret": session['mwoauth_access_token']['secret']
                 }
                 task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
-                return jsonify({"success": True, "task_id": task.id}), 202
+
+                return jsonify({
+                    "success": True,
+                    "data": {
+                    "task_id": task.id
+                    },
+                    "errors": []
+                }), 202
         else:
             return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
     else:
@@ -142,7 +149,7 @@ def preference():
                     "lang": user_lang,
                     "skip_upload_selection": skip_upload_selection
                 },
-                "error": []
+                "errors": []
             }), 200
 
     elif request.method == 'POST':
@@ -319,21 +326,47 @@ def get_base_variables():
 
 @app.route('/api/task_status/<task_id>', methods=['GET'])
 def get_task_status(task_id):
-    """
-    Endpoint to get the status and result of a Celery task.
-    """
     task = AsyncResult(task_id, app=celery_app)
-    response = {
-        "task_id": task_id,
-        "status": task.status,
-        "result": task.result if task.successful() else None,
-    }
-    
-    # If task failed, include error information
-    if task.failed():
-        response["error"] = str(task.result)
 
-    return jsonify(response), 200
+    if task.state == 'PENDING':
+        return jsonify({
+            "success": True,
+            "data": {"status": "pending"},
+            "errors": []
+        }), 200
+
+    elif task.state == 'PROGRESS':
+        return jsonify({
+            "success": True,
+            "data": {
+                "status": "in_progress",
+                "meta": task.info
+            },
+            "errors": []
+        }), 200
+
+    elif task.state == 'SUCCESS':
+        return jsonify({
+            "success": True,
+            "data": {
+                "status": "completed",
+                "result": task.result
+            },
+            "errors": []
+        }), 200
+
+    elif task.state == 'FAILURE':
+        return jsonify({
+            "success": False,
+            "data": {},
+            "errors": [str(task.info)]
+        }), 500
+
+    return jsonify({
+        "success": True,
+        "data": {"status": task.state},
+        "errors": []
+    }), 200
 
 
 def authenticated_session():
