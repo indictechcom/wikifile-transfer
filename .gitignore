@@ -2,7 +2,13 @@ __pycache__/
 .idea/*
 .idea/
 venv/
+env
 
 temp_images/*
 !temp_images/.gitkeep
+
+# Application log files generated at runtime (see configure_logging in app.py)
+logs/*
+!logs/.gitkeep
+
 config.yaml
