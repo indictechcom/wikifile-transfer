@@ -17,9 +17,9 @@ import logging
 from celeryWorker import app as celery_app
 from tasks import upload_image_task
 from celery.result import AsyncResult
-
+from loggings import initialize_logging_file, log_exception, log_info
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+initialize_logging_file("./logs/wikifile_transfer.log")
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -72,6 +72,8 @@ def upload():
         src_filename = src_url.split('/')[-1]
         src_fileext = src_filename.split('.')[-1]
 
+        log_info("Processing upload for %s", src_filename)
+
         # Downloading the source file and getting saved file name
         downloaded_filename = download_image(src_project, src_lang, src_filename)
 
@@ -97,6 +99,7 @@ def upload():
                     return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
 
                 resp["source"] = src_url
+                log_info("Upload results for %s: %s", tr_filename, resp)
 
                 return jsonify({
                     "success": True,
@@ -112,10 +115,15 @@ def upload():
                     "secret": session['mwoauth_access_token']['secret']
                 }
                 task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
+                
+                log_info("Asynchronous upload initiated for %s", tr_filename)
+
                 return jsonify({"success": True, "task_id": task.id}), 202
         else:
+            log_exception("Not enough data for upload: %s", tr_filename)
             return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
     else:
+        log_exception("Invalid request method for upload endpoint")
         return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
@@ -133,6 +141,7 @@ def preference():
             user_project = user.pref_project
             user_lang = user.pref_language
             skip_upload_selection = user.skip_upload_selection
+            log_info("Retrieved preferences for user %s: project=%s, language=%s, skip_upload_selection=%s", user.username, user_project, user_lang, skip_upload_selection)
             
         return jsonify(
             {
@@ -171,12 +180,15 @@ def preference():
 
         try:
             db.session.commit()
+            log_info("Preferences updated for user %s", cur_username)
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
         except:
             db.session.rollback()
+            log_exception("Failed to update preferences for user %s", cur_username)
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
     else:
+        log_exception("Invalid request method for preference endpoint")
         return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
@@ -213,12 +225,15 @@ def languagePreference():
 
         try:
             db.session.commit()
+            log_info("User language updated for %s", cur_username)
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
         except:
             db.session.rollback()
+            log_exception("Failed to update user language for %s", cur_username)
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
     else:
+        log_exception("Invalid request method for language preference endpoint")
         return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
@@ -228,6 +243,7 @@ def get_wikitext():
     src_project = request.args.get('src_project')
     src_filename = request.args.get('src_filename')
     tr_lang = request.args.get('tr_lang')
+    log_info("Retrieving wikitext for %s (%s) -> %s", src_filename, src_lang, tr_lang)
 
     # In any case, return the strings only with 200 status code
     if not all([src_lang, src_project, src_filename, tr_lang]):
@@ -259,6 +275,7 @@ def get_wikitext():
         else:
             return jsonify({"wikitext": ""}), 200
     except:
+        log_exception("Error occurred while retrieving wikitext for %s (%s) -> %s", src_filename, src_lang, tr_lang)
         return jsonify({"wikitext": ""}), 200
 
 
@@ -276,6 +293,7 @@ def editPage():
         target_filename = targetUrl.split('/')[-1]
 
         target_endpoint = "https://" + target_lang + "." + target_project + ".org/w/api.php"
+
 
         # Authenticate Session
         ses = authenticated_session()
@@ -302,16 +320,20 @@ def editPage():
         response = requests.post(url=target_endpoint, data=edit_params, auth=ses)
 
         if response.status_code == 200:
+            log_info("Page edited successfully for %s", target_filename)
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
         else:
+            log_exception("Failed to edit page for %s: %s", target_filename, response.text)
             return jsonify({ "success": False, "data": {}, "errors": ["Edit Error"]}), 500
 
     else:
+        log_exception("Invalid request method for edit page endpoint")
         return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/user', methods=['GET'])
 def get_base_variables():
+    log_info("Retrieving base variables for user")
     return jsonify({
         "logged": logged() is not None,
         "username": MW_OAUTH.get_current_user(True)
@@ -332,6 +354,7 @@ def get_task_status(task_id):
     # If task failed, include error information
     if task.failed():
         response["error"] = str(task.result)
+        log_exception("Task failed for %s: %s", task_id, response["error"])
 
     return jsonify(response), 200
 
@@ -344,6 +367,7 @@ def authenticated_session():
             resource_owner_key=session['mwoauth_access_token']['key'],
             resource_owner_secret=session['mwoauth_access_token']['secret']
         )
+        log_info("Authenticated session created")
         return auth
 
     return None
@@ -351,9 +375,11 @@ def authenticated_session():
 
 def db_user():
     if logged():
+        log_info("Retrieving user information for %s", MW_OAUTH.get_current_user(True))
         user = User.query.filter_by(username=MW_OAUTH.get_current_user(True)).first()
         return user
     else:
+        log_info("No user logged in")
         return None
 
 
@@ -361,6 +387,7 @@ def logged():
     if MW_OAUTH.get_current_user(True) is not None:
         return MW_OAUTH.get_current_user(True)
     else:
+        log_info("User is not logged in")
         return None
 
 
