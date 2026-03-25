@@ -1,9 +1,10 @@
 import datetime
+import os
 import requests
 import mwparserfromhell
 from templatelist import TEMPLATES
 from logger import log_exception
-from exceptions import operation_success, operation_failure, download_error, upload_error
+from exceptions import operation_success, operation_failure, download_error, upload_error, file_handling_error
 def download_image(src_project, src_lang, src_filename):
     src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
 
@@ -32,7 +33,8 @@ def download_image(src_project, src_lang, src_filename):
     # Download the Image File
     r = requests.get(image_url, allow_redirects=True)
     filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
-    open("temp_images/" + filename, 'wb').write(r.content)
+    with open("temp_images/" + filename, 'wb') as output_file:
+        output_file.write(r.content)
 
     return operation_success({"filename": filename})
 
@@ -58,12 +60,11 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     }
 
     # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
-    
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    with open(file_path, 'rb') as file_handle:
+        file = {
+            'file': file_handle
+        }
+        response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
 
     # Try block to get Link and URL
     try:
@@ -77,6 +78,21 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         "wikipage_url": wikifile_url,
         "file_link": file_link
     })
+
+
+def cleanup_temp_file(file_path):
+    if not file_path:
+        return operation_failure(file_handling_error("File path is empty"))
+
+    if not os.path.exists(file_path):
+        return operation_success({"removed": False, "reason": "file_not_found"})
+
+    try:
+        os.remove(file_path)
+        return operation_success({"removed": True})
+    except OSError as error:
+        log_exception("Failed to remove temporary file %s", file_path)
+        return operation_failure(file_handling_error(str(error)))
 
 
 def get_localized_wikitext(wikitext, src_endpoint, target_lang):

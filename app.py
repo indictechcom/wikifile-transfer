@@ -4,7 +4,7 @@
 from flask import Flask, request, session, jsonify, render_template
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
-from utils import download_image, get_localized_wikitext, getHeader, process_upload
+from utils import download_image, get_localized_wikitext, getHeader, process_upload, cleanup_temp_file
 from flask_cors import CORS
 import requests_oauthlib
 import requests
@@ -114,19 +114,30 @@ def upload():
                 return error_response_from_error(file_handling_error("Missing downloaded filename"), status_code=500)
 
             file_path = 'temp_images/' + downloaded_filename
+            if not os.path.isfile(file_path):
+                return error_response_from_error(file_handling_error("Temporary file not found after download"), status_code=500)
+
             file_size = os.path.getsize(file_path)
+            if file_size <= 0:
+                cleanup_temp_file(file_path)
+                return error_response_from_error(file_handling_error("Temporary file is empty"), status_code=400)
 
             if file_size < 50 * 1024 * 1024:  # 50 MB
                 # Process synchronously
-                resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
-                if not resp.get("ok"):
-                    return error_response_from_error(resp.get("error"), status_code=500)
+                try:
+                    resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+                    if not resp.get("ok"):
+                        return error_response_from_error(resp.get("error"), status_code=500)
 
-                response_data = resp.get("data", {})
-                response_data["source"] = src_url
-                log_info("Upload results for %s: %s", tr_filename, response_data)
+                    response_data = resp.get("data", {})
+                    response_data["source"] = src_url
+                    log_info("Upload results for %s: %s", tr_filename, response_data)
 
-                return success_response(response_data, status_code=200)
+                    return success_response(response_data, status_code=200)
+                finally:
+                    cleanup_result = cleanup_temp_file(file_path)
+                    if not cleanup_result.get("ok"):
+                        log_exception("Failed to cleanup temporary file in sync upload: %s", file_path)
             else:
                 # Process asynchronously using Celery
                 OAuthObj = {
