@@ -1,7 +1,8 @@
 from celeryWorker import app
 import requests
 import requests_oauthlib
-from loggings import log_exception,log_info
+from logger import log_exception,log_info
+from exceptions import operation_success, operation_failure, upload_error
 
 @app.task(bind=True)
 def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj):
@@ -50,11 +51,11 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         file_link = response["upload"]["imageinfo"]["url"]
     except KeyError:
         log_exception("Failed to retrieve upload results for %s", tr_filename)
-        return {"success": False, "data": {}, "errors": ["Upload failed"]}
+        return operation_failure(upload_error(f"Unable to parse async upload response for {tr_filename}"))
 
     self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100})
 
-    return {
+    return operation_success({
         "wikipage_url": wikifile_url,
         "file_link": file_link
-    }
+    })

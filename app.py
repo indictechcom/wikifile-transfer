@@ -17,7 +17,15 @@ import logging
 from celeryWorker import app as celery_app
 from tasks import upload_image_task
 from celery.result import AsyncResult
-from loggings import initialize_logging_file, log_exception, log_info
+from logger import initialize_logging_file, log_exception, log_info
+from exceptions import (
+    success_response,
+    error_response,
+    error_response_from_error,
+    validation_error,
+    authentication_error,
+    file_handling_error,
+)
 # Configure logging
 initialize_logging_file("./logs/wikifile_transfer.log")
 logger = logging.getLogger(__name__)
@@ -63,9 +71,14 @@ def index():
 @app.route('/api/upload', methods=['POST'])
 def upload():
     if request.method == 'POST':
-        data = request.get_json()
-        src_url = urllib.parse.unquote(data.get('srcUrl'))
+        data = request.get_json() or {}
+        src_url = urllib.parse.unquote(data.get('srcUrl', ''))
+        if not src_url:
+            return error_response_from_error(validation_error("srcUrl is required"), status_code=400)
+
         match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+        if not match:
+            return error_response_from_error(validation_error("Invalid source wiki URL"), status_code=400)
 
         src_project = match[0][1]
         src_lang = match[0][0]
@@ -75,12 +88,15 @@ def upload():
         log_info("Processing upload for %s", src_filename)
 
         # Downloading the source file and getting saved file name
-        downloaded_filename = download_image(src_project, src_lang, src_filename)
+        download_result = download_image(src_project, src_lang, src_filename)
 
         # Getting Target Details
         tr_project = data.get('trproject')
         tr_lang = data.get('trlang')
         tr_filename = data.get('trfilename')
+        if not all([tr_project, tr_lang, tr_filename]):
+            return error_response_from_error(validation_error("trproject, trlang and trfilename are required"), status_code=400)
+
         tr_filename = urllib.parse.unquote(tr_filename)
         tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
 
@@ -88,24 +104,29 @@ def upload():
         ses = authenticated_session()
 
         # Check whether we have enough data or not
-        if None not in (downloaded_filename, tr_filename, src_fileext, ses):
+        if not download_result.get("ok"):
+            log_exception("Download failed for %s", src_filename)
+            return error_response_from_error(download_result.get("error"), status_code=500)
+
+        if None not in (tr_filename, src_fileext, ses):
+            downloaded_filename = download_result["data"].get("filename")
+            if not downloaded_filename:
+                return error_response_from_error(file_handling_error("Missing downloaded filename"), status_code=500)
+
             file_path = 'temp_images/' + downloaded_filename
             file_size = os.path.getsize(file_path)
 
             if file_size < 50 * 1024 * 1024:  # 50 MB
                 # Process synchronously
                 resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
-                if resp is None:
-                    return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
+                if not resp.get("ok"):
+                    return error_response_from_error(resp.get("error"), status_code=500)
 
-                resp["source"] = src_url
-                log_info("Upload results for %s: %s", tr_filename, resp)
+                response_data = resp.get("data", {})
+                response_data["source"] = src_url
+                log_info("Upload results for %s: %s", tr_filename, response_data)
 
-                return jsonify({
-                    "success": True,
-                    "data": resp,
-                    "errors": []
-                }), 200
+                return success_response(response_data, status_code=200)
             else:
                 # Process asynchronously using Celery
                 OAuthObj = {
@@ -118,13 +139,13 @@ def upload():
                 
                 log_info("Asynchronous upload initiated for %s", tr_filename)
 
-                return jsonify({"success": True, "task_id": task.id}), 202
+                return success_response({"task_id": task.id}, status_code=202)
         else:
             log_exception("Not enough data for upload: %s", tr_filename)
-            return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
+            return error_response_from_error(validation_error("Not enough data for upload"), status_code=400)
     else:
         log_exception("Invalid request method for upload endpoint")
-        return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        return error_response("INVALID_REQUEST", "Invalid Request", status_code=400)
 
 
 @app.route('/api/preference', methods = ['GET', 'POST'])

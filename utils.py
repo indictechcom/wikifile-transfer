@@ -2,7 +2,8 @@ import datetime
 import requests
 import mwparserfromhell
 from templatelist import TEMPLATES
-from loggings import log_exception
+from logger import log_exception
+from exceptions import operation_success, operation_failure, download_error, upload_error
 def download_image(src_project, src_lang, src_filename):
     src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
 
@@ -21,7 +22,7 @@ def download_image(src_project, src_lang, src_filename):
         image_url = list (page.values()) [0]["imageinfo"][0]["url"]
     except KeyError:
         log_exception("Failed to retrieve image URL for %s", src_filename)
-        return None
+        return operation_failure(download_error(f"Unable to resolve image URL for {src_filename}"))
 
     # Create a unique file name based on time
     current_time = str(datetime.datetime.now())
@@ -33,7 +34,7 @@ def download_image(src_project, src_lang, src_filename):
     filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
     open("temp_images/" + filename, 'wb').write(r.content)
 
-    return filename
+    return operation_success({"filename": filename})
 
 
 def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
@@ -70,12 +71,12 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         file_link = response["upload"]["imageinfo"]["url"]
     except KeyError:
         log_exception("Failed to retrieve upload results for %s", tr_filename)
-        return None
+        return operation_failure(upload_error(f"Unable to parse upload response for {tr_filename}"))
 
-    return {
+    return operation_success({
         "wikipage_url": wikifile_url,
         "file_link": file_link
-    }
+    })
 
 
 def get_localized_wikitext(wikitext, src_endpoint, target_lang):
