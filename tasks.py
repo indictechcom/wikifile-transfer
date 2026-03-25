@@ -16,6 +16,7 @@ import requests_oauthlib
 
 from celeryWorker import app
 from exceptions import TaskError
+from utils import cleanup_temp_file
 
 logger = logging.getLogger(__name__)
 
@@ -48,72 +49,72 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, oa
 
     self.update_state(state="PROGRESS", meta={"current": 0, "total": 100})
 
-    # --- Step 1: Fetch CSRF token (0% → 25%) --------------------------------
     try:
-        csrf_response = requests.get(
-            url=tr_endpoint,
-            params={"action": "query", "meta": "tokens", "format": "json"},
-            auth=ses,
-        )
-        csrf_response.raise_for_status()
-        csrf_token = csrf_response.json()["query"]["tokens"]["csrftoken"]
-    except requests.RequestException as e:
-        logger.exception("Task %s – network error fetching CSRF token", task_id)
-        raise TaskError(f"Failed to fetch CSRF token: {e}") from e
-    except (KeyError, ValueError) as e:
-        logger.exception("Task %s – unexpected CSRF token response", task_id)
-        raise TaskError(f"Unexpected CSRF token response: {e}") from e
-
-    self.update_state(state="PROGRESS", meta={"current": 25, "total": 100})
-
-    # --- Step 2: Upload file (25% → 75%) ------------------------------------
-    upload_param = {
-        "action":         "upload",
-        "filename":       f"{tr_filename}.{src_fileext}",
-        "format":         "json",
-        "token":          csrf_token,
-        "ignorewarnings": 1,
-    }
-
-    # Use a context manager so the file handle is always closed after the
-    # request, even if an exception is raised mid-upload.
-    try:
-        with open(file_path, "rb") as fh:
-            upload_response = requests.post(
+        # --- Step 1: Fetch CSRF token (0% → 25%) ----------------------------
+        try:
+            csrf_response = requests.get(
                 url=tr_endpoint,
-                files={"file": fh},
-                data=upload_param,
+                params={"action": "query", "meta": "tokens", "format": "json"},
                 auth=ses,
             )
-        upload_response.raise_for_status()
-        response_json = upload_response.json()
-    except OSError as e:
-        logger.exception("Task %s – could not open '%s'", task_id, file_path)
-        raise TaskError(f"Could not read local file for upload: {e}") from e
-    except requests.RequestException as e:
-        logger.exception("Task %s – network error during upload", task_id)
-        raise TaskError(f"Upload request failed: {e}") from e
-    except ValueError as e:
-        logger.exception("Task %s – invalid JSON in upload response", task_id)
-        raise TaskError(f"Unexpected upload response format: {e}") from e
+            csrf_response.raise_for_status()
+            csrf_token = csrf_response.json()["query"]["tokens"]["csrftoken"]
+        except requests.RequestException as e:
+            logger.exception("Task %s – network error fetching CSRF token", task_id)
+            raise TaskError(f"Failed to fetch CSRF token: {e}") from e
+        except (KeyError, ValueError) as e:
+            logger.exception("Task %s – unexpected CSRF token response", task_id)
+            raise TaskError(f"Unexpected CSRF token response: {e}") from e
 
-    self.update_state(state="PROGRESS", meta={"current": 75, "total": 100})
+        self.update_state(state="PROGRESS", meta={"current": 25, "total": 100})
 
-    # --- Step 3: Parse response (75% → 100%) --------------------------------
-    try:
-        wikifile_url = response_json["upload"]["imageinfo"]["descriptionurl"]
-        file_link    = response_json["upload"]["imageinfo"]["url"]
-    except KeyError:
-        # The wiki rejected the upload (permissions, duplicate, etc.).
-        logger.error(
-            "Task %s – imageinfo missing in upload response: %s",
-            task_id, response_json,
-        )
-        raise TaskError(
-            f"Upload rejected by target wiki. Response: {response_json}"
-        )
+        # --- Step 2: Upload file (25% → 75%) --------------------------------
+        upload_param = {
+            "action":         "upload",
+            "filename":       f"{tr_filename}.{src_fileext}",
+            "format":         "json",
+            "token":          csrf_token,
+            "ignorewarnings": 1,
+        }
 
-    self.update_state(state="PROGRESS", meta={"current": 100, "total": 100})
-    logger.info("Task %s completed: %s", task_id, wikifile_url)
+        try:
+            with open(file_path, "rb") as fh:
+                upload_response = requests.post(
+                    url=tr_endpoint,
+                    files={"file": fh},
+                    data=upload_param,
+                    auth=ses,
+                )
+            upload_response.raise_for_status()
+            response_json = upload_response.json()
+        except OSError as e:
+            logger.exception("Task %s – could not open '%s'", task_id, file_path)
+            raise TaskError(f"Could not read local file for upload: {e}") from e
+        except requests.RequestException as e:
+            logger.exception("Task %s – network error during upload", task_id)
+            raise TaskError(f"Upload request failed: {e}") from e
+        except ValueError as e:
+            logger.exception("Task %s – invalid JSON in upload response", task_id)
+            raise TaskError(f"Unexpected upload response format: {e}") from e
 
-    return {"wikipage_url": wikifile_url, "file_link": file_link}
+        self.update_state(state="PROGRESS", meta={"current": 75, "total": 100})
+
+        # --- Step 3: Parse response (75% → 100%) ----------------------------
+        try:
+            wikifile_url = response_json["upload"]["imageinfo"]["descriptionurl"]
+            file_link    = response_json["upload"]["imageinfo"]["url"]
+        except KeyError:
+            logger.error(
+                "Task %s – imageinfo missing in upload response: %s",
+                task_id, response_json,
+            )
+            raise TaskError(f"Upload rejected by target wiki. Response: {response_json}")
+
+        self.update_state(state="PROGRESS", meta={"current": 100, "total": 100})
+        logger.info("Task %s completed: %s", task_id, wikifile_url)
+
+        return {"wikipage_url": wikifile_url, "file_link": file_link}
+
+    finally:
+        # Delete the temp file whether the task succeeded or failed.
+        cleanup_temp_file(file_path)

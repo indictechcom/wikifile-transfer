@@ -35,12 +35,11 @@ from exceptions import (
     DatabaseError,
     DownloadError,
     ExternalAPIError,
-    UploadError,
     ValidationError,
 )
 from model import db, User
 from tasks import upload_image_task
-from utils import download_image, get_localized_wikitext, getHeader, process_upload
+from utils import cleanup_temp_file, download_image, get_localized_wikitext, getHeader, process_upload
 
 logger = logging.getLogger(__name__)
 
@@ -165,15 +164,18 @@ def upload():
         logger.info(
             "Uploading '%s' synchronously to %s.%s", tr_filename, tr_lang, tr_project
         )
-        # process_upload raises UploadError (HTTP 502) on any failure;
-        # no null-check needed – the exception bubbles up to the error handler.
-        resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+        try:
+            resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+        finally:
+            # Always delete the temp file, whether the upload succeeded or raised.
+            cleanup_temp_file(file_path)
         resp["source"] = src_url
         logger.info("Synchronous upload succeeded: %s", resp.get("wikipage_url"))
         return jsonify({"success": True, "data": resp, "errors": []}), 200
 
     else:
-        # Large file – dispatch to Celery worker.
+        # Large file – dispatch to Celery worker. The task is responsible for
+        # deleting the temp file once it finishes (success or failure).
         logger.info(
             "File exceeds 50 MB (%d bytes); dispatching async task for '%s'",
             file_size,

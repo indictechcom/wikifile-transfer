@@ -11,6 +11,7 @@ getHeader           Return the standard User-Agent header dict.
 
 import datetime
 import logging
+import os
 
 import mwparserfromhell
 import requests
@@ -258,6 +259,15 @@ def get_localized_wikitext(wikitext: str, src_endpoint: str, target_lang: str) -
 # ---------------------------------------------------------------------------
 # Shared headers
 # ---------------------------------------------------------------------------
+
+def cleanup_temp_file(file_path: str) -> None:
+    """Delete a temporary file. Logs a warning if removal fails instead of raising."""
+    try:
+        os.remove(file_path)
+        logger.debug("Deleted temp file '%s'", file_path)
+    except OSError as e:
+        logger.warning("Could not delete temp file '%s': %s", file_path, e)
+
 
 def getHeader() -> dict:
     """Return the standard User-Agent header for all outgoing HTTP requests."""
