@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-
 from flask import Flask, request, session, jsonify, render_template
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
-from utils import download_image, get_localized_wikitext, getHeader, process_upload
+from utils import download_image, get_localized_wikitext, get_headers, process_upload, cleanup_temp_file
 from flask_cors import CORS
 import requests_oauthlib
 import requests
@@ -49,7 +48,7 @@ MW_OAUTH = MWOAuth(
     base_url=BASE_URL,
     consumer_key=CONSUMER_KEY,
     consumer_secret=CONSUMER_SECRET,
-    user_agent= getHeader()['User-Agent']
+    user_agent= get_headers()['User-Agent']
 )
 app.register_blueprint(MW_OAUTH.bp)
 
@@ -63,46 +62,69 @@ def index():
 @app.route('/api/upload', methods=['POST'])
 def upload():
     if request.method == 'POST':
-        data = request.get_json()
-        src_url = urllib.parse.unquote(data.get('srcUrl'))
-        match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+        downloaded_filename = None
+        file_path = None
 
-        src_project = match[0][1]
-        src_lang = match[0][0]
-        src_filename = src_url.split('/')[-1]
-        src_fileext = src_filename.split('.')[-1]
+        try:
+            data = request.get_json(silent=True)
+            if not data:
+                return jsonify({"success": False, "data": {}, "errors": ["Invalid JSON"]}), 400
+            src_url = data.get('srcUrl')
+            if not src_url:
+                return jsonify({"success": False, "data": {}, "errors": ["Missing srcUrl"]}), 400
+            
+            src_url = urllib.parse.unquote(src_url)
+            match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
 
-        # Downloading the source file and getting saved file name
-        downloaded_filename = download_image(src_project, src_lang, src_filename)
+            if not match or len(match[0]) < 2:
+                return jsonify({"success": False, "data": {}, "errors": ["Invalid srcUrl format"]}), 400
 
-        # Getting Target Details
-        tr_project = data.get('trproject')
-        tr_lang = data.get('trlang')
-        tr_filename = data.get('trfilename')
-        tr_filename = urllib.parse.unquote(tr_filename)
-        tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
+            src_project = match[0][1]
+            src_lang = match[0][0]
+            src_filename = src_url.split('/')[-1]
+            src_fileext = src_filename.split('.')[-1]
 
-        # Authenticate Session
-        ses = authenticated_session()
+            # Downloading the source file and getting saved file name
+            downloaded_filename = download_image(src_project, src_lang, src_filename)
+            if downloaded_filename is None:
+                return jsonify({"success": False, "data": {}, "errors": ["Failed to download source image"]}), 400
 
-        # Check whether we have enough data or not
-        if None not in (downloaded_filename, tr_filename, src_fileext, ses):
-            file_path = 'temp_images/' + downloaded_filename
+            # Getting Target Details
+            tr_project = data.get('trproject')
+            tr_lang = data.get('trlang')
+            tr_filename = data.get('trfilename')
+            
+            if not all([tr_project, tr_lang, tr_filename]):
+                return jsonify({"success": False, "data": {}, "errors": ["Missing target project, language, or filename"]}), 400
+            
+            tr_filename = urllib.parse.unquote(tr_filename)
+            tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
+
+            # Authenticate Session
+            ses = authenticated_session()
+            if ses is None:
+                return jsonify({"success": False, "data": {}, "errors": ["User not authenticated"]}), 401
+            
+            file_path = "temp_images/" + downloaded_filename
             file_size = os.path.getsize(file_path)
 
+            # Check whether we have enough data or not
             if file_size < 50 * 1024 * 1024:  # 50 MB
                 # Process synchronously
-                resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
-                if resp is None:
-                    return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
+                try:
+                    resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+                    if resp is None:
+                        return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
 
-                resp["source"] = src_url
+                    resp["source"] = src_url
 
-                return jsonify({
-                    "success": True,
-                    "data": resp,
-                    "errors": []
-                }), 200
+                    return jsonify({
+                        "success": True,
+                        "data": resp,
+                        "errors": []
+                    }), 200
+                finally:
+                    cleanup_temp_file(file_path)
             else:
                 # Process asynchronously using Celery
                 OAuthObj = {
@@ -113,11 +135,14 @@ def upload():
                 }
                 task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
                 return jsonify({"success": True, "task_id": task.id}), 202
-        else:
-            return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
+        
+        except Exception as e:
+            logger.error(f"Unexpected error in /api/upload: {e}", exc_info=True)
+            if downloaded_filename and file_path:
+                cleanup_temp_file(file_path)
+            return jsonify({"success": False, "data": {}, "errors": ["Internal Server Error"]}), 500
     else:
         return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
-
 
 @app.route('/api/preference', methods = ['GET', 'POST'])
 def preference():
