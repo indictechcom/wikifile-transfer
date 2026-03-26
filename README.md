@@ -1,41 +1,59 @@
 # Wikifile Transfer
 
-A tool to copy files across Wikimedia projects using MediaWiki APIs and OAuth authentication. It supports: source file download from one Wikimedia project, target upload to another project, Wikimedia OAuth sign-in, asynchronous upload for large files with Celery, and localized wikitext title mapping.
+![License](https://img.shields.io/badge/license-MIT-blue.svg)
+![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![Node.js](https://img.shields.io/badge/node-18+-green.svg)
+![Flask](https://img.shields.io/badge/Flask-2.x-black.svg?logo=flask)
+![React](https://img.shields.io/badge/React-18-blue.svg?logo=react)
+![Redis](https://img.shields.io/badge/Redis-broker-red.svg?logo=redis)
+![Docker](https://img.shields.io/badge/Docker-compose-blue.svg?logo=docker)
 
-## Features
 
-- OAuth-based user login via `flask-mwoauth`
-- Source image download via MediaWiki API
-- Target image upload with CSRF token handling
-- Large file handling (50MB+): asynchronous Celery task (`tasks.upload_image_task`)
-- Edit file descriptions and append wikitext (`/api/edit_page`)
-- User preferences (project, language, skip selection) persisted via SQLAlchemy model `User`
-- Localized wikitext translation helper (`utils.get_localized_wikitext`)
+> A [Toolforge](https://wikifile-transfer.toolforge.org) web application that helps Wikimedia contributors seamlessly transfer media files across Wikimedia projects using MediaWiki APIs and OAuth authentication.
 
-## Architecture
 
-- Python backend: Flask app (`app.py`)
-- Task queue: Celery (`celeryWorker.py`) with Redis broker
-- DB model: SQLAlchemy (`model.py`) and Flask-Migrate
-- Utils: `utils.py` for download/upload and template localization
-- Frontend: React (Create React App under `frontend/`)
-- Deployment: `docker-compose.yml` orchestrates `web`, `worker`, and `redis`
+---
+## Overview
+ 
+Wikifile Transfer is a [Toolforge](https://wikifile-transfer.toolforge.org) web application maintained by [Indic TechCom](https://meta.wikimedia.org/wiki/Indic-TechCom). It allows Wikimedia contributors to transfer media files (images, documents, etc.) between different Wikimedia projects (e.g., from English Wikipedia to Commons, or between language wikis) without manual downloading and re-uploading.
+ 
+**Live Tool:** https://wikifile-transfer.toolforge.org  
+**Issue Tracker:** https://phabricator.wikimedia.org/tag/indic-techcom/  
+**Discussion:** https://meta.wikimedia.org/wiki/Talk:Indic-TechCom/Tools/Wikifile-transfer
 
-## Prerequisites
 
-- Python 3.10+ (or compatible)
-- Node.js 18+ and npm
-- Redis (local or Docker)
-- MySQL/MariaDB for `SQLALCHEMY_DATABASE_URI` (or SQLite for prototyping)
-- Wikimedia OAuth consumer key/secret
 
-## Configuration
 
-Copy and edit `config.yaml.bak`:
+---
+## ⚙️ Prerequisites
+ 
+Before setting up, ensure you have the following installed:
+ 
+| Requirement | Version | Notes |
+|---|---|---|
+| Python | 3.10+ | Backend runtime |
+| Node.js + npm | 18+ | Frontend build |
+| Redis | Any stable | Task broker |
+| MySQL / MariaDB | Any stable | Production DB (SQLite for prototyping) |
+| Docker + Compose | Latest | Optional but recommended |
+| Wikimedia OAuth | — | Consumer key/secret from [Special:OAuthConsumerRegistration](https://meta.wikimedia.org/wiki/Special:OAuthConsumerRegistration) |
 
+
+---
+ 
+## 🔧 Configuration
+ 
+Copy the example config and fill in your values:
+ 
+```bash
+cp config.yaml.bak config.yaml
+```
+ 
+Then edit `config.yaml`:
+ 
 ```yaml
-ENV: dev # dev, prod
-SECRET_KEY: your-secret-key
+ENV: dev                        # Use 'dev' locally, 'prod' on Toolforge
+SECRET_KEY: your-secret-key     # Any random string for Flask sessions
 CONSUMER_KEY: <wikimedia-consumer-key>
 CONSUMER_SECRET: <wikimedia-consumer-secret>
 OAUTH_MWURI: https://meta.wikimedia.org/w
@@ -45,84 +63,125 @@ PREFERRED_URL_SCHEME: https
 SQLALCHEMY_DATABASE_URI: mysql+pymysql://user:pass@host/dbname
 SQLALCHEMY_TRACK_MODIFICATIONS: False
 ```
+ 
+> ⚠️ **Never commit `config.yaml` to version control.** It is already listed in `.gitignore`.
+ 
+Also ensure the `temp_images/` directory exists and is writable:
+ 
+```bash
+mkdir -p temp_images && chmod 755 temp_images
+```
+ 
+---
 
-Ensure `temp_images/` exists and is writable.
-
-## Local development
-
-1. Create virtualenv:
-
+## 🛠️ Local Development
+ 
+Follow these steps to run the project locally without Docker:
+ 
+### 1. Clone the Repository
+ 
+```bash
+git clone https://github.com/indictechcom/wikifile-transfer.git
+cd wikifile-transfer
+```
+ 
+### 2. Set Up Python Virtual Environment
+ 
 ```bash
 python3 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate        # On Windows: .venv\Scripts\activate
 pip install --upgrade pip
 pip install -r requirements.txt
 ```
-
-2. Create database and run migrations:
-
+ 
+### 3. Configure the App
+ 
 ```bash
-flask db init  # only first time
-flask db migrate -m "initial"
+cp config.yaml.bak config.yaml
+# Edit config.yaml with your OAuth credentials and DB URI
+```
+ 
+### 4. Set Up the Database
+ 
+```bash
+flask db init        # Only required the very first time
+flask db migrate -m "initial migration"
 flask db upgrade
 ```
-
-3. Start Redis (e.g. `redis-server`) or use Docker via compose.
-
-4. Start Celery worker:
-
+ 
+### 5. Start Redis
+ 
+```bash
+redis-server         # Or use Docker: docker run -p 6379:6379 redis
+```
+ 
+### 6. Start the Celery Worker
+ 
 ```bash
 celery -A celeryWorker.app worker --loglevel=info
 ```
-
-5. Start Flask app:
-
+ 
+### 7. Start the Flask Backend
+ 
 ```bash
 python app.py
 ```
-
-6. Start frontend (in separate shell):
-
+ 
+Backend will be available at `http://localhost:5001`
+ 
+### 8. Start the React Frontend
+ 
+Open a new terminal:
+ 
 ```bash
 cd frontend
 npm install
 npm start
 ```
-
-## Docker setup
-
+ 
+Frontend will be available at `http://localhost:3000`
+ 
+---
+ 
+## 🐳 Docker Setup
+ 
+The easiest way to get the full stack running locally:
+ 
 ```bash
 docker-compose up --build
 ```
+ 
+This spins up three services:
+ 
+| Service | URL |
+|---|---|
+| Flask backend | `http://localhost:5001` |
+| React frontend | `http://localhost:3000` |
+| Redis | `localhost:6379` |
+ 
+To stop all services:
+ 
+```bash
+docker-compose down
+```
+---
+## 🤝 Contributing
+ 
+We welcome contributions from the community! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines on:
+ 
+- Setting up your development environment
+- Submitting pull requests
+- Reporting bugs and requesting features
+- Coding conventions and branch naming
+ 
+**Bug reports & feature requests:** [Phabricator](https://phabricator.wikimedia.org/tag/indic-techcom/)  
+**Discussion:** [Meta-Wiki Talk Page](https://meta.wikimedia.org/wiki/Talk:Indic-TechCom/Tools/Wikifile-transfer)  
+**Code contributions:** Fork this repo and open a pull request against `master`
 
-- Backend exposed at `http://localhost:5001`
-- Redis at `localhost:6379`
 
-## API endpoints
 
-- `GET /` or `/index` - web UI entry
-- `POST /api/upload` - transfer file from source URL to target project (synchronous if <50MB, asynchronous otherwise)
-- `GET/POST /api/preference` - user preferences
-- `GET/POST /api/user_language` - preferred frontend language
-- `GET /api/get_wikitext` - fetch source page wikitext + localize links
-- `POST /api/edit_page` - append content to target file page
-- `GET /api/user` - logged-in user status
-- `GET /api/task_status/<task_id>` - Celery upload task status/result
 
-## Important files
 
-- `app.py` - Flask routes and app logic
-- `utils.py` - helper operations: download/upload/locale conversion
-- `tasks.py` - Celery file upload worker
-- `celeryWorker.py` - Celery app config
-- `model.py` - SQLAlchemy `User` model
-- `templatelist.py` - list of templates to localize in wikitext
-
-## Notes
-
-- The service assumes valid `srcUrl` with pattern `<lang>.<project>.org/wiki/<filename>`.
-- Uploaded filenames are built from user-provided `trfilename` + source extension.
-- All uploads use `ignorewarnings=1` by default; review for policy compliance.
 
 ## License
 
