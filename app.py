@@ -64,61 +64,138 @@ def index():
 def upload():
     if request.method == 'POST':
         data = request.get_json()
-        src_url = urllib.parse.unquote(data.get('srcUrl'))
+
+        # Validate request body
+        if not data:
+            return jsonify({
+                "success": False,
+                "data": {},
+                "errors": ["Invalid request body"]
+            }), 400
+
+        src_url = data.get('srcUrl')
+        if not src_url:
+            return jsonify({
+                "success": False,
+                "data": {},
+                "errors": ["Source URL is required"]
+            }), 400
+
+        src_url = urllib.parse.unquote(src_url)
+
+        # Validate source URL format
         match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+        if not match:
+            return jsonify({
+                "success": False,
+                "data": {},
+                "errors": ["Invalid source URL format"]
+            }), 400
 
         src_project = match[0][1]
         src_lang = match[0][0]
+
         src_filename = src_url.split('/')[-1]
+        if '.' not in src_filename:
+            return jsonify({
+                "success": False,
+                "data": {},
+                "errors": ["Invalid file format in source URL"]
+            }), 400
+
         src_fileext = src_filename.split('.')[-1]
 
-        # Downloading the source file and getting saved file name
+        # Download file
         downloaded_filename = download_image(src_project, src_lang, src_filename)
 
-        # Getting Target Details
+        # Validate target inputs
         tr_project = data.get('trproject')
         tr_lang = data.get('trlang')
         tr_filename = data.get('trfilename')
+
+        if not all([tr_project, tr_lang, tr_filename]):
+            return jsonify({
+                "success": False,
+                "data": {},
+                "errors": ["Missing target parameters"]
+            }), 400
+
         tr_filename = urllib.parse.unquote(tr_filename)
         tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
 
-        # Authenticate Session
+        # Authenticate session
         ses = authenticated_session()
+        if not ses:
+            return jsonify({
+                "success": False,
+                "data": {},
+                "errors": ["User not authenticated"]
+            }), 401
 
-        # Check whether we have enough data or not
-        if None not in (downloaded_filename, tr_filename, src_fileext, ses):
-            file_path = 'temp_images/' + downloaded_filename
-            file_size = os.path.getsize(file_path)
+        # Validate downloaded file
+        if None in (downloaded_filename, src_fileext):
+            return jsonify({
+                "success": False,
+                "data": {},
+                "errors": ["File download failed"]
+            }), 400
 
-            if file_size < 50 * 1024 * 1024:  # 50 MB
-                # Process synchronously
-                resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
-                if resp is None:
-                    return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
+        file_path = 'temp_images/' + downloaded_filename
 
-                resp["source"] = src_url
+        if not os.path.exists(file_path):
+            return jsonify({
+                "success": False,
+                "data": {},
+                "errors": ["File not found after download"]
+            }), 500
 
+        file_size = os.path.getsize(file_path)
+
+        if file_size < 50 * 1024 * 1024:
+            # Synchronous upload
+            resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+
+            if resp is None:
                 return jsonify({
-                    "success": True,
-                    "data": resp,
-                    "errors": []
-                }), 200
-            else:
-                # Process asynchronously using Celery
-                OAuthObj = {
-                    "consumer_key": CONSUMER_KEY,
-                    "consumer_secret": CONSUMER_SECRET,
-                    "key": session['mwoauth_access_token']['key'],
-                    "secret": session['mwoauth_access_token']['secret']
-                }
-                task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
-                return jsonify({"success": True, "task_id": task.id}), 202
+                    "success": False,
+                    "data": {},
+                    "errors": ["Upload failed"]
+                }), 500
+
+            resp["source"] = src_url
+
+            return jsonify({
+                "success": True,
+                "data": resp,
+                "errors": []
+            }), 200
+
         else:
-            return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
-    else:
-        return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+            # Asynchronous upload (Celery)
+            OAuthObj = {
+                "consumer_key": CONSUMER_KEY,
+                "consumer_secret": CONSUMER_SECRET,
+                "key": session['mwoauth_access_token']['key'],
+                "secret": session['mwoauth_access_token']['secret']
+            }
 
+            task = upload_image_task.delay(
+                file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj
+            )
 
+            return jsonify({
+                "success": True,
+                "data": {
+                    "task_id": task.id
+                },
+                "errors": []
+            }), 202
+
+    return jsonify({
+        "success": False,
+        "data": {},
+        "errors": ["Invalid Request"]
+    }), 400
 @app.route('/api/preference', methods = ['GET', 'POST'])
 def preference():
 
