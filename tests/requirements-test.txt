@@ -1,0 +1,12 @@
+# Test dependencies for wikifile-transfer
+# Install with: pip install -r requirements-test.txt
+
+pytest>=7.0
+pytest-flask>=1.3
+mwparserfromhell>=0.6.4
+requests_oauthlib>=1.3.1
+redis>=4.0.0
+pyyaml>=5.4.1
+flask_mwoauth>=0.3.0
+flask_migrate>=3.0.0
+flask_cors>=3.0.0
