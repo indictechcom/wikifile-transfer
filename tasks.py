@@ -1,5 +1,5 @@
 from celeryWorker import app
-from utils import _fetch_csrf_token, success_response, error_response
+from utils import _fetch_csrf_token, success_response, error_response, safe_delete_temp_file
 import requests
 import requests_oauthlib
 from globalExceptions import CSRFTokenError, UploadError, OAuthConfigError
@@ -81,6 +81,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         csrf_token = _fetch_csrf_token(tr_endpoint, ses)
     except CSRFTokenError as exc:
         log.error("Could not obtain CSRF token", exc_info=True, extra={"task_id": self.request.id})
+        safe_delete_temp_file(file_path)
         return error_response(str(exc), error_type="CSRFTokenError")
  
     log.debug("CSRF token acquired", extra={"task_id": self.request.id})
@@ -139,10 +140,12 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
             exc_info=True,
             extra={"task_id": self.request.id, "status_code": exc.response.status_code},
         )
+        safe_delete_temp_file(file_path)
         return error_response(str(UploadError(tr_filename, str(exc))), error_type="UploadError")
     
     except requests.RequestException as exc:
         log.error("Network error during upload", exc_info=True, extra={"task_id": self.request.id})
+        safe_delete_temp_file(file_path)
         raise self.retry(exc=exc)
 
     self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
@@ -166,7 +169,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
                 "missing_key": str(exc),
             },
         )
-        
+        safe_delete_temp_file(file_path)
         return error_response(
                 str(UploadError(tr_filename, api_error)),
                 error_type="UploadError")
@@ -177,7 +180,13 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         "Image uploaded successfully",
         extra={"task_id": self.request.id, "tr_filename": tr_filename, "url": wikifile_url},
     )
+    
+    safe_delete_temp_file(file_path)
+    
     return success_response({
         "wikipage_url": wikifile_url,
         "file_link": file_link
     })
+    
+
+    

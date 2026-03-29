@@ -63,6 +63,18 @@ def error_response(message: str, status: int = 500, error_type: str = None):
         return jsonify(body), status
     return body
 
+def safe_delete_temp_file(local_path: str) -> None:
+    if not local_path or not os.path.exists(local_path):
+        return
+    try:
+        os.unlink(local_path)
+        log.debug("Temporary file deleted successfully", extra={"path": local_path})
+    except OSError as exc:
+        log.warning(
+            "Could not delete temporary file (leaked file)",
+            extra={"path": local_path, "error": str(exc)},
+        )
+
 def download_image(src_project, src_lang, src_filename):
     src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
 
@@ -146,6 +158,7 @@ def download_image(src_project, src_lang, src_filename):
             fh.write(r.content)
             
     except OSError as exc:
+        safe_delete_temp_file(local_path)
         raise ImageDownloadError(
             src_filename, f"Could not write image to {local_path!r}: {exc}"
         ) from exc
@@ -179,7 +192,7 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     # API Parameter to upload the file
     upload_param = {
         "action": "upload",
-        "tr_filename": tr_filename + "." + src_fileext,
+        "filename": tr_filename + "." + src_fileext,
         "format": "json",
         "token": csrf_token,
         "ignorewarnings": 1

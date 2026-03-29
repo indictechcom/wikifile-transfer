@@ -4,7 +4,7 @@
 from flask import Flask, request, session, jsonify, render_template
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
-from utils import download_image, get_localized_wikitext, getHeader, process_upload, _fetch_csrf_token, success_response, error_response
+from utils import download_image, get_localized_wikitext, getHeader, process_upload, _fetch_csrf_token, success_response, error_response, safe_delete_temp_file
 from flask_cors import CORS
 import requests_oauthlib
 import requests
@@ -174,6 +174,11 @@ def upload():
         if None not in (downloaded_filename, tr_filename, src_fileext, ses):
             file_path = 'temp_images/' + downloaded_filename
             file_size = os.path.getsize(file_path)
+            
+            if file_size < 0:
+                log.error("Downloaded file has invalid size", extra={"file_path": file_path, "file_size": file_size})
+                safe_delete_temp_file(file_path)
+                return error_response("Downloaded file is invalid", 502, "ImageDownloadError")
 
             if file_size < 50 * 1024 * 1024:  # 50 MB
                 log.info("Processing upload synchronously", extra={"file_path": file_path, "tr_filename": tr_filename})
