@@ -4,9 +4,10 @@ import requests_oauthlib
 import os
 import logging
 from exceptions import UploadError
+from logging_config import get_logger
 
 # Task logger
-logger = logging.getLogger(__name__)
+logger = get_logger(__name__)
 
 @celery_app.task(bind=True)
 def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj):
