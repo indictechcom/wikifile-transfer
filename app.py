@@ -90,6 +90,19 @@ def upload():
             file_path = 'temp_images/' + downloaded_filename
             file_size = os.path.getsize(file_path)
 
+            # Add max file size validation (100MB limit)
+            MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
+
+            if file_size > MAX_FILE_SIZE:
+                if os.path.exists(file_path):
+                    os.remove(file_path)
+
+                return jsonify({
+                    "success": False,
+                    "data": {},
+                    "errors": ["File size exceeds maximum allowed limit (100MB)"]
+                }), 400
+
             if file_size < 50 * 1024 * 1024:  # 50 MB
                 # Process synchronously
                 resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
@@ -323,19 +336,17 @@ def get_task_status(task_id):
     Endpoint to get the status and result of a Celery task.
     """
     task = AsyncResult(task_id, app=celery_app)
-    # Improve Task Status API
     response = {
-        "success": True,
+                "success": True,
         "task_id": task_id,
-        "state": task.status,   # PENDING, STARTED, SUCCESS, FAILURE
+        "state": task.status,
         "data": {},
         "errors": []
-    }
+        }
     
     if task.successful():
         response["data"] = task.result
 
-    # If task failed, include error information
     elif task.failed():
         response["success"] = False
         response["errors"] = [str(task.result)]
