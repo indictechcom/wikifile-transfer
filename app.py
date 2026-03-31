@@ -323,11 +323,15 @@ def get_task_status(task_id):
     Endpoint to get the status and result of a Celery task.
     """
     task = AsyncResult(task_id, app=celery_app)
-    response = {
-        "task_id": task_id,
-        "status": task.status,
-        "result": task.result if task.successful() else None,
-    }
+  response = {
+    "task_id": task_id,
+    "status": task.status,
+    "result": task.result if task.successful() else None,
+    "meta": task.info if isinstance(task.info, dict) else {}
+}
+
+if task.failed():
+    response["error"] = str(task.result)}
     
     # If task failed, include error information
     if task.failed():
