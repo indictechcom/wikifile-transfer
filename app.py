@@ -92,17 +92,22 @@ def upload():
 
             if file_size < 50 * 1024 * 1024:  # 50 MB
                 # Process synchronously
-                resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
-                if resp is None:
-                    return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
+                # Temp File Cleanup micro task T415717
+                try:
+                    resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+                    if resp is None:
+                        return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
 
-                resp["source"] = src_url
+                    resp["source"] = src_url
 
-                return jsonify({
-                    "success": True,
-                    "data": resp,
-                    "errors": []
-                }), 200
+                    return jsonify({
+                        "success": True,
+                        "data": resp,
+                        "errors": []
+                    }), 200
+                finally:
+                    if os.path.exists(file_path):
+                        os.remove(file_path)
             else:
                 # Process asynchronously using Celery
                 OAuthObj = {
