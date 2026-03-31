@@ -35,44 +35,56 @@ def download_image(src_project, src_lang, src_filename):
     return filename
 
 
+import os
+
 def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
-    # API Parameter to get CSRF Token
-    csrf_param = {
-        "action": "query",
-        "meta": "tokens",
-        "format": "json"
-    }
-
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
-    csrf_token = response.json()["query"]["tokens"]["csrftoken"]
-
-    # API Parameter to upload the file
-    upload_param = {
-        "action": "upload",
-        "filename": tr_filename + "." + src_fileext,
-        "format": "json",
-        "token": csrf_token,
-        "ignorewarnings": 1
-    }
-
-    # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
-
-    # Try block to get Link and URL
     try:
-        wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
-        file_link = response["upload"]["imageinfo"]["url"]
-    except KeyError:
-        return None
+        # API Parameter to get CSRF Token
+        csrf_param = {
+            "action": "query",
+            "meta": "tokens",
+            "format": "json"
+        }
 
-    return {
-        "wikipage_url": wikifile_url,
-        "file_link": file_link
-    }
+        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
+        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+
+        # API Parameter to upload the file
+        upload_param = {
+            "action": "upload",
+            "filename": tr_filename + "." + src_fileext,
+            "format": "json",
+            "token": csrf_token,
+            "ignorewarnings": 1
+        }
+
+        # SAFE FILE HANDLING
+        with open(file_path, 'rb') as f:
+            file = {'file': f}
+
+            response = requests.post(
+                url=tr_endpoint,
+                files=file,
+                data=upload_param,
+                auth=ses
+            ).json()
+
+        # Try block to get Link and URL
+        try:
+            wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
+            file_link = response["upload"]["imageinfo"]["url"]
+        except KeyError:
+            return None
+
+        return {
+            "wikipage_url": wikifile_url,
+            "file_link": file_link
+        }
+
+    finally:
+        # ALWAYS CLEANUP TEMP FILE
+        if os.path.exists(file_path):
+            os.remove(file_path)
 
 
 def get_localized_wikitext(wikitext, src_endpoint, target_lang):
