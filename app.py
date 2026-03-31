@@ -18,6 +18,14 @@ from celeryWorker import app as celery_app
 from tasks import upload_image_task
 from celery.result import AsyncResult
 
+#adding error helper
+def error_response(message, status_code=400):
+    return jsonify({
+        "success": False,
+        "data": {},
+        "errors": [message]
+    }), status_code
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -65,8 +73,15 @@ def upload():
     if request.method == 'POST':
         data = request.get_json()
         src_url = urllib.parse.unquote(data.get('srcUrl'))
-        match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
 
+        #adding for safe data access
+        if not src_url:
+            return error_response("Missing source URL", 400)
+        match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+        #addinig url validation
+        if not match:
+            return error_response("Invalid source URL format", 400)
+        
         src_project = match[0][1]
         src_lang = match[0][0]
         src_filename = src_url.split('/')[-1]
@@ -79,6 +94,10 @@ def upload():
         tr_project = data.get('trproject')
         tr_lang = data.get('trlang')
         tr_filename = data.get('trfilename')
+
+        #adding safe data access
+        if not tr_filename:
+            return error_response("Missing target filename", 400)
         tr_filename = urllib.parse.unquote(tr_filename)
         tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
 
