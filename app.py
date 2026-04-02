@@ -269,7 +269,12 @@ def editPage():
         targetUrl = data.get('targetUrl')
         content = data.get('content')
 
+        if not targetUrl or not content:
+            return jsonify({ "success": False, "data": {}, "errors": ["Missing targetUrl or content"]}), 400
+
         match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", targetUrl)
+        if not match:
+            return jsonify({ "success": False, "data": {}, "errors": ["Invalid targetUrl format"]}), 400
 
         target_project = match[0][1]
         target_lang = match[0][0]
@@ -279,6 +284,9 @@ def editPage():
 
         # Authenticate Session
         ses = authenticated_session()
+        
+        if not ses:
+            return jsonify({ "success": False, "data": {}, "errors": ["Authentication Required"]}), 401
 
         # API Parameter to get CSRF Token
         csrf_param = {
@@ -287,19 +295,31 @@ def editPage():
             "format": "json"
         }
 
-        response = requests.get(url=target_endpoint, params=csrf_param, auth=ses)
-        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+        try:
+            response = requests.get(url=target_endpoint, params=csrf_param, auth=ses, timeout=10)
+            response.raise_for_status()
+            csrf_token = response.json().get("query", {}).get("tokens", {}).get("csrftoken")
+            if not csrf_token:
+                raise ValueError("CSRF token not found in response")
+        except Exception as e:
+            logger.error(f"Failed to fetch CSRF token: {e}")
+            return jsonify({ "success": False, "data": {}, "errors": ["Failed to fetch CSRF token"]}), 502
 
         # API Parameters to edit the page
         edit_params = {
             "action": "edit",
-            "title": "File:" + target_filename.split(':')[1],
+            "title": "File:" + target_filename.split(':')[1] if ':' in target_filename else "File:" + target_filename,
             "token": csrf_token,
             "format": "json",
             "appendtext": content
         }
 
-        response = requests.post(url=target_endpoint, data=edit_params, auth=ses)
+        try:
+            response = requests.post(url=target_endpoint, data=edit_params, auth=ses, timeout=10)
+            response.raise_for_status()
+        except Exception as e:
+            logger.error(f"Failed to edit file on Wiki: {e}")
+            return jsonify({ "success": False, "data": {}, "errors": ["Edit Error"]}), 502
 
         if response.status_code == 200:
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
