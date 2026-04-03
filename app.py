@@ -17,6 +17,7 @@ import logging
 from celeryWorker import app as celery_app
 from tasks import upload_image_task
 from celery.result import AsyncResult
+from helpers.error_handler import create_error_response
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -73,6 +74,12 @@ def upload():
         src_fileext = src_filename.split('.')[-1]
 
         # Downloading the source file and getting saved file name
+        if not src_url or "wiki/File:" not in src_url:
+            return jsonify(create_error_response(
+            code="INVALID_INPUT",
+            message="Invalid source URL provided",
+            retryable=False
+         )), 400
         downloaded_filename = download_image(src_project, src_lang, src_filename)
 
         # Getting Target Details
@@ -94,8 +101,11 @@ def upload():
                 # Process synchronously
                 resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
                 if resp is None:
-                    return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
-
+                    return jsonify(create_error_response(
+                            code="UPLOAD_FAILED",
+                            message="Upload failed during processing",
+                            retryable=True
+                    )), 500
                 resp["source"] = src_url
 
                 return jsonify({
@@ -114,9 +124,17 @@ def upload():
                 task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
                 return jsonify({"success": True, "task_id": task.id}), 202
         else:
-            return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
+           return jsonify(create_error_response(
+                code="INVALID_INPUT",
+                message="Required data is missing",
+                retryable=False
+                )), 400
     else:
-        return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        return jsonify(create_error_response(
+            code="INVALID_REQUEST",
+            message="Invalid request method",
+            retryable=False
+        )), 400
 
 
 @app.route('/api/preference', methods = ['GET', 'POST'])
