@@ -16,10 +16,9 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
     )
 
     # STARTED STATE
-    self.update_state(state='STARTED', meta={
-        "stage": "Initializing upload",
-        "progress": 0,
-        "started_at": str(datetime.utcnow())
+    self.update_state(state='PROGRESS', meta={
+        "message": "Initializing upload",
+        "progress": 0
     })
 
     try:
@@ -39,7 +38,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
 
         # PROGRESS - 25%
         self.update_state(state='PROGRESS', meta={
-            "stage": "Fetched CSRF token",
+            "message": "Fetched CSRF token",
             "progress": 25
         })
 
@@ -70,7 +69,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
 
         # PROGRESS - 75%
         self.update_state(state='PROGRESS', meta={
-            "stage": "Uploading file",
+            "message": "Uploading file",
             "progress": 75
         })
 
@@ -80,7 +79,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
 
         # PROGRESS - 100%
         self.update_state(state='PROGRESS', meta={
-            "stage": "Upload completed",
+            "message": "Upload completed",
             "progress": 100
         })
 
@@ -94,13 +93,5 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         }
 
     except Exception as e:
-        # FAILURE STATE
-        self.update_state(state='FAILURE', meta={
-            "stage": "Upload failed",
-            "error": str(e)
-        })
-
-        return {
-            "status": "FAILED",
-            "error": str(e)
-        }
+        # Re-raise so Celery properly transitions task to FAILURE state
+        raise self.retry(exc=e, max_retries=0)
