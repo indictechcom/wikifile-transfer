@@ -14,6 +14,7 @@ import AppFooter from "./components/AppFooter";
 import Home from "./pages/Home";
 import NotFound from "./pages/NotFound";
 import Upload from "./pages/Upload";
+import BatchUpload from "./pages/BatchUpload";
 import Preferences from "./pages/Preferences";
 import About from "./pages/About";
 
@@ -35,6 +36,7 @@ const router = createHashRouter([
     children: [
       { path: "", element: <Home /> },
       { path: "upload", element: <Upload /> },
+      { path: "batch-upload", element: <BatchUpload /> },
       { path: "preferences", element: <Preferences /> },
       { path: "about", element: <About /> },
       { path: "*", element: <NotFound /> },
