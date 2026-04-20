@@ -1,7 +1,7 @@
 ENV: dev # dev, prod
 SECRET_KEY: RandomeString
-CONSUMER_KEY: 
-CONSUMER_SECRET: 
+CONSUMER_KEY: dummyKey
+CONSUMER_SECRET:dummykey
 OAUTH_MWURI: https://meta.wikimedia.org/w
 SESSION_COOKIE_SECURE: True
 SESSION_REFRESH_EACH_REQUEST: False
