@@ -15,13 +15,15 @@ def download_image(src_project, src_lang, src_filename):
         "iilocalonly": 1
     }
 
-    page = requests.get(url=src_endpoint, params=param).json()['query']['pages']
-
+    response = requests.get(url=src_endpoint, params=param)
+    
+    # Safely attempt to parse JSON to prevent crashes on 502/404 HTML responses (Issue #42)
     try:
-        image_url = list (page.values()) [0]["imageinfo"][0]["url"]
-    except KeyError:
+        page = response.json().get('query', {}).get('pages', {})
+        image_url = list(page.values())[0]["imageinfo"][0]["url"]
+    except (requests.exceptions.JSONDecodeError, KeyError, IndexError):
         return None
-
+        
     # Create a unique file name based on time
     current_time = str(datetime.datetime.now())
     get_filename = current_time.replace(':', '_')

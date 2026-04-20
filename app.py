@@ -61,12 +61,22 @@ def index():
 
 
 @app.route('/api/upload', methods=['POST'])
+@app.route('/api/upload', methods=['POST'])
 def upload():
     if request.method == 'POST':
         data = request.get_json()
         src_url = urllib.parse.unquote(data.get('srcUrl'))
-        match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+        
+        # Issue #40: Prevent transfers from Wikimedia Commons since they are universally shared
+        if "commons.wikimedia.org" in src_url.lower():
+            return jsonify({
+                "success": False, 
+                "data": {}, 
+                "errors": ["Files on Wikimedia Commons are already available to all wikis. No transfer is needed!"]
+            }), 400
 
+        match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+        
         src_project = match[0][1]
         src_lang = match[0][0]
         src_filename = src_url.split('/')[-1]
