@@ -1,7 +1,11 @@
 from celeryWorker import app
+import logging
 import requests
 import requests_oauthlib
 import os
+from utils import get_headers
+
+logger = logging.getLogger(__name__)
 
 @app.task(bind=True)
 def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj):
@@ -20,7 +24,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         "format": "json"
     }
 
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
+    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=get_headers(), timeout=30)
     csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
     self.update_state(state='PROGRESS', meta={'current': 25, 'total': 100})
@@ -34,12 +38,15 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         "ignorewarnings": 1
     }
 
-    # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    with open(file_path, 'rb') as f:
+        response = requests.post(
+            url = tr_endpoint,
+            files = {"file": f},
+            data = upload_param,
+            auth = ses,
+            headers = get_headers(),
+            timeout = 120
+        ).json()
 
     self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
 
@@ -48,6 +55,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
         file_link = response["upload"]["imageinfo"]["url"]
     except KeyError:
+        logger.error("Upload failed for %s: %s", tr_filename, response)
         return {"success": False, "data": {}, "errors": ["Upload failed"]}
 
     self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100})

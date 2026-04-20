@@ -1,7 +1,16 @@
 import datetime
+import logging
 import requests
 import mwparserfromhell
 from templatelist import TEMPLATES
+
+logger = logging.getLogger(__name__)
+
+def get_headers():
+    agent = "Wikifile-transfer/1.0 (https://wikifile-transfer.toolforge.org; 0freerunning@gmail.com)"
+    return {
+        "User-Agent": agent
+    }
 
 def download_image(src_project, src_lang, src_filename):
     src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
@@ -15,22 +24,22 @@ def download_image(src_project, src_lang, src_filename):
         "iilocalonly": 1
     }
 
-    page = requests.get(url=src_endpoint, params=param).json()['query']['pages']
-
     try:
+        page = requests.get(url=src_endpoint, params=param, headers=get_headers(), timeout=30).json()['query']['pages']
         image_url = list (page.values()) [0]["imageinfo"][0]["url"]
-    except KeyError:
+    except (KeyError, IndexError):
+        logger.error("Failed to get image URL for %s", src_filename)
         return None
 
     # Create a unique file name based on time
-    current_time = str(datetime.datetime.now())
-    get_filename = current_time.replace(':', '_')
-    get_filename = get_filename.replace(' ', '_')
+    current_time = str(datetime.datetime.now()).replace(":", "_").replace(" ", "_")
 
     # Download the Image File
-    r = requests.get(image_url, allow_redirects=True)
-    filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
-    open("temp_images/" + filename, 'wb').write(r.content)
+    r = requests.get(image_url, allow_redirects=True, headers=get_headers(), timeout=60)
+    filename = current_time + "." + r.headers.get('content-type').replace('image/', '')
+
+    with open("temp_images/" + filename, 'wb') as f:
+        f.write(r.content)
 
     return filename
 
@@ -43,7 +52,7 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         "format": "json"
     }
 
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
+    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=get_headers(), timeout=30)
     csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
     # API Parameter to upload the file
@@ -56,17 +65,22 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     }
 
     # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    with open(file_path, 'rb') as f:
+        response = requests.post(
+            url=tr_endpoint,
+            files={"file": f},
+            data=upload_param,
+            auth=ses,
+            headers=get_headers(),
+            timeout=120
+        ).json()
 
     # Try block to get Link and URL
     try:
         wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
         file_link = response["upload"]["imageinfo"]["url"]
     except KeyError:
+        logger.error("Upload failed for %s: %s", tr_filename, response)
         return None
 
     return {
@@ -94,7 +108,12 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                     }
 
                     try:
-                        response = requests.get(url=src_endpoint, params=lang_param)
+                        response = requests.get(
+                            url=src_endpoint, 
+                            params=lang_param,
+                            headers=get_headers(),
+                            timeout=30
+                        )
                         response.raise_for_status()
                         langlinks = response.json()["query"]["pages"][0]["langlinks"]
 
@@ -102,13 +121,8 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                             if langlink["lang"] == target_lang:
                                 template.add("Article", langlink["title"])
                                 break
-                    except:
-                        return str(wikicode)
+                    except Exception as e:
+                        logger.warning("Failed to localize template %s: %s", template.name.strip(), e)
+                        continue
 
     return str(wikicode)
-
-def getHeader():
-    agent = 'Wikifile-transfer/1.0 (https://wikifile-transfer.toolforge.org; 0freerunning@gmail.com)'
-    return {
-        'User-Agent': agent
-    }
