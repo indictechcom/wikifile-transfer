@@ -26,7 +26,8 @@ app = Flask(__name__)
 
 # Load configuration from YAML file
 __dir__ = os.path.dirname(__file__)
-app.config.update(yaml.safe_load(open(os.path.join(__dir__, 'config.yaml'))))
+with open(os.path.join(__dir__, 'config.yaml')) as f:
+    app.config.update(yaml.safe_load(f))
 
 # Get variables
 ENV = app.config['ENV']
@@ -171,13 +172,14 @@ def preference():
 
         try:
             db.session.commit()
-            return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+            return jsonify({"success": True, "data": {}, "errors": []}), 200
+        except Exception as e:
             db.session.rollback()
-            return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
+            logger.error("Failed to save preference for user %s: %s", cur_username, e)
+            return jsonify({"success": False, "data": {}, "errors": ["Database Error"]}), 500
 
     else:
-        return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/user_language', methods=['GET', 'POST'])
@@ -213,13 +215,14 @@ def languagePreference():
 
         try:
             db.session.commit()
-            return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+            return jsonify({"success": True, "data": {}, "errors": []}), 200
+        except Exception as e:
             db.session.rollback()
-            return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
+            logger.error("Failed to save language preference for user %s: %s", cur_username, e)
+            return jsonify({"success": False, "data": {}, "errors": ["Database Error"]}), 500
 
     else:
-        return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/get_wikitext', methods=['GET'])
@@ -258,7 +261,8 @@ def get_wikitext():
             return jsonify({"wikitext": wikitext}), 200
         else:
             return jsonify({"wikitext": ""}), 200
-    except:
+    except Exception as e:
+        logger.error("Failed to fetch wikitext for %s/%s/%s: %s", src_lang, src_project, src_filename, e)
         return jsonify({"wikitext": ""}), 200
 
 
