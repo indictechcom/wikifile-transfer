@@ -24,9 +24,11 @@ logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
 
-# Load configuration from YAML file
+# Load configuration from YAML file (use test config when running under pytest)
 __dir__ = os.path.dirname(__file__)
-app.config.update(yaml.safe_load(open(os.path.join(__dir__, 'config.yaml'))))
+_config_file = 'config.test.yaml' if os.environ.get('WIKIFILE_TEST') else 'config.yaml'
+with open(os.path.join(__dir__, _config_file)) as f:
+    app.config.update(yaml.safe_load(f))
 
 # Get variables
 ENV = app.config['ENV']
@@ -172,7 +174,7 @@ def preference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception:
             db.session.rollback()
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
@@ -214,7 +216,7 @@ def languagePreference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception:
             db.session.rollback()
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
@@ -258,7 +260,7 @@ def get_wikitext():
             return jsonify({"wikitext": wikitext}), 200
         else:
             return jsonify({"wikitext": ""}), 200
-    except:
+    except Exception:
         return jsonify({"wikitext": ""}), 200
 
 

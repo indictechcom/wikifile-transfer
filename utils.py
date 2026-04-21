@@ -30,7 +30,8 @@ def download_image(src_project, src_lang, src_filename):
     # Download the Image File
     r = requests.get(image_url, allow_redirects=True)
     filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
-    open("temp_images/" + filename, 'wb').write(r.content)
+    with open("temp_images/" + filename, 'wb') as f:
+        f.write(r.content)
 
     return filename
 
@@ -56,11 +57,9 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     }
 
     # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    with open(file_path, 'rb') as f:
+        file = {'file': f}
+        response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
 
     # Try block to get Link and URL
     try:
@@ -102,7 +101,7 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                             if langlink["lang"] == target_lang:
                                 template.add("Article", langlink["title"])
                                 break
-                    except:
+                    except Exception:
                         return str(wikicode)
 
     return str(wikicode)
