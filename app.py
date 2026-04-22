@@ -17,9 +17,17 @@ import logging
 from celeryWorker import app as celery_app
 from tasks import upload_image_task
 from celery.result import AsyncResult
-
+from logger import initialize_logging_file, log_exception, log_info
+from exceptions import (
+    success_response,
+    error_response,
+    error_response_from_error,
+    validation_error,
+    authentication_error,
+    file_handling_error,
+)
 # Configure logging
-logging.basicConfig(level=logging.INFO)
+initialize_logging_file("./logs/wikifile_transfer.log")
 logger = logging.getLogger(__name__)
 
 app = Flask(__name__)
@@ -63,22 +71,32 @@ def index():
 @app.route('/api/upload', methods=['POST'])
 def upload():
     if request.method == 'POST':
-        data = request.get_json()
-        src_url = urllib.parse.unquote(data.get('srcUrl'))
+        data = request.get_json() or {}
+        src_url = urllib.parse.unquote(data.get('srcUrl', ''))
+        if not src_url:
+            return error_response_from_error(validation_error("srcUrl is required"), status_code=400)
+
         match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+        if not match:
+            return error_response_from_error(validation_error("Invalid source wiki URL"), status_code=400)
 
         src_project = match[0][1]
         src_lang = match[0][0]
         src_filename = src_url.split('/')[-1]
         src_fileext = src_filename.split('.')[-1]
 
+        log_info("Processing upload for %s", src_filename)
+
         # Downloading the source file and getting saved file name
-        downloaded_filename = download_image(src_project, src_lang, src_filename)
+        download_result = download_image(src_project, src_lang, src_filename)
 
         # Getting Target Details
         tr_project = data.get('trproject')
         tr_lang = data.get('trlang')
         tr_filename = data.get('trfilename')
+        if not all([tr_project, tr_lang, tr_filename]):
+            return error_response_from_error(validation_error("trproject, trlang and trfilename are required"), status_code=400)
+
         tr_filename = urllib.parse.unquote(tr_filename)
         tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
 
@@ -86,23 +104,29 @@ def upload():
         ses = authenticated_session()
 
         # Check whether we have enough data or not
-        if None not in (downloaded_filename, tr_filename, src_fileext, ses):
+        if not download_result.get("ok"):
+            log_exception("Download failed for %s", src_filename)
+            return error_response_from_error(download_result.get("error"), status_code=500)
+
+        if None not in (tr_filename, src_fileext, ses):
+            downloaded_filename = download_result["data"].get("filename")
+            if not downloaded_filename:
+                return error_response_from_error(file_handling_error("Missing downloaded filename"), status_code=500)
+
             file_path = 'temp_images/' + downloaded_filename
             file_size = os.path.getsize(file_path)
 
             if file_size < 50 * 1024 * 1024:  # 50 MB
                 # Process synchronously
                 resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
-                if resp is None:
-                    return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
+                if not resp.get("ok"):
+                    return error_response_from_error(resp.get("error"), status_code=500)
 
-                resp["source"] = src_url
+                response_data = resp.get("data", {})
+                response_data["source"] = src_url
+                log_info("Upload results for %s: %s", tr_filename, response_data)
 
-                return jsonify({
-                    "success": True,
-                    "data": resp,
-                    "errors": []
-                }), 200
+                return success_response(response_data, status_code=200)
             else:
                 # Process asynchronously using Celery
                 OAuthObj = {
@@ -112,11 +136,16 @@ def upload():
                     "secret": session['mwoauth_access_token']['secret']
                 }
                 task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
-                return jsonify({"success": True, "task_id": task.id}), 202
+                
+                log_info("Asynchronous upload initiated for %s", tr_filename)
+
+                return success_response({"task_id": task.id}, status_code=202)
         else:
-            return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
+            log_exception("Not enough data for upload: %s", tr_filename)
+            return error_response_from_error(validation_error("Not enough data for upload"), status_code=400)
     else:
-        return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        log_exception("Invalid request method for upload endpoint")
+        return error_response("INVALID_REQUEST", "Invalid Request", status_code=400)
 
 
 @app.route('/api/preference', methods = ['GET', 'POST'])
@@ -133,6 +162,7 @@ def preference():
             user_project = user.pref_project
             user_lang = user.pref_language
             skip_upload_selection = user.skip_upload_selection
+            log_info("Retrieved preferences for user %s: project=%s, language=%s, skip_upload_selection=%s", user.username, user_project, user_lang, skip_upload_selection)
             
         return jsonify(
             {
@@ -171,12 +201,15 @@ def preference():
 
         try:
             db.session.commit()
+            log_info("Preferences updated for user %s", cur_username)
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
         except:
             db.session.rollback()
+            log_exception("Failed to update preferences for user %s", cur_username)
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
     else:
+        log_exception("Invalid request method for preference endpoint")
         return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
@@ -213,12 +246,15 @@ def languagePreference():
 
         try:
             db.session.commit()
+            log_info("User language updated for %s", cur_username)
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
         except:
             db.session.rollback()
+            log_exception("Failed to update user language for %s", cur_username)
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
     else:
+        log_exception("Invalid request method for language preference endpoint")
         return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
@@ -228,6 +264,7 @@ def get_wikitext():
     src_project = request.args.get('src_project')
     src_filename = request.args.get('src_filename')
     tr_lang = request.args.get('tr_lang')
+    log_info("Retrieving wikitext for %s (%s) -> %s", src_filename, src_lang, tr_lang)
 
     # In any case, return the strings only with 200 status code
     if not all([src_lang, src_project, src_filename, tr_lang]):
@@ -259,6 +296,7 @@ def get_wikitext():
         else:
             return jsonify({"wikitext": ""}), 200
     except:
+        log_exception("Error occurred while retrieving wikitext for %s (%s) -> %s", src_filename, src_lang, tr_lang)
         return jsonify({"wikitext": ""}), 200
 
 
@@ -276,6 +314,7 @@ def editPage():
         target_filename = targetUrl.split('/')[-1]
 
         target_endpoint = "https://" + target_lang + "." + target_project + ".org/w/api.php"
+
 
         # Authenticate Session
         ses = authenticated_session()
@@ -302,16 +341,20 @@ def editPage():
         response = requests.post(url=target_endpoint, data=edit_params, auth=ses)
 
         if response.status_code == 200:
+            log_info("Page edited successfully for %s", target_filename)
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
         else:
+            log_exception("Failed to edit page for %s: %s", target_filename, response.text)
             return jsonify({ "success": False, "data": {}, "errors": ["Edit Error"]}), 500
 
     else:
+        log_exception("Invalid request method for edit page endpoint")
         return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/user', methods=['GET'])
 def get_base_variables():
+    log_info("Retrieving base variables for user")
     return jsonify({
         "logged": logged() is not None,
         "username": MW_OAUTH.get_current_user(True)
@@ -332,6 +375,7 @@ def get_task_status(task_id):
     # If task failed, include error information
     if task.failed():
         response["error"] = str(task.result)
+        log_exception("Task failed for %s: %s", task_id, response["error"])
 
     return jsonify(response), 200
 
@@ -344,6 +388,7 @@ def authenticated_session():
             resource_owner_key=session['mwoauth_access_token']['key'],
             resource_owner_secret=session['mwoauth_access_token']['secret']
         )
+        log_info("Authenticated session created")
         return auth
 
     return None
@@ -351,9 +396,11 @@ def authenticated_session():
 
 def db_user():
     if logged():
+        log_info("Retrieving user information for %s", MW_OAUTH.get_current_user(True))
         user = User.query.filter_by(username=MW_OAUTH.get_current_user(True)).first()
         return user
     else:
+        log_info("No user logged in")
         return None
 
 
@@ -361,6 +408,7 @@ def logged():
     if MW_OAUTH.get_current_user(True) is not None:
         return MW_OAUTH.get_current_user(True)
     else:
+        log_info("User is not logged in")
         return None
 
 

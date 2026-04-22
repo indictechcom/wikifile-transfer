@@ -2,7 +2,8 @@ import datetime
 import requests
 import mwparserfromhell
 from templatelist import TEMPLATES
-
+from logger import log_exception
+from exceptions import operation_success, operation_failure, download_error, upload_error
 def download_image(src_project, src_lang, src_filename):
     src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
 
@@ -20,7 +21,8 @@ def download_image(src_project, src_lang, src_filename):
     try:
         image_url = list (page.values()) [0]["imageinfo"][0]["url"]
     except KeyError:
-        return None
+        log_exception("Failed to retrieve image URL for %s", src_filename)
+        return operation_failure(download_error(f"Unable to resolve image URL for {src_filename}"))
 
     # Create a unique file name based on time
     current_time = str(datetime.datetime.now())
@@ -32,7 +34,7 @@ def download_image(src_project, src_lang, src_filename):
     filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
     open("temp_images/" + filename, 'wb').write(r.content)
 
-    return filename
+    return operation_success({"filename": filename})
 
 
 def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
@@ -59,6 +61,7 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     file = {
         'file': open(file_path, 'rb')
     }
+    
 
     response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
 
@@ -67,12 +70,13 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
         file_link = response["upload"]["imageinfo"]["url"]
     except KeyError:
-        return None
+        log_exception("Failed to retrieve upload results for %s", tr_filename)
+        return operation_failure(upload_error(f"Unable to parse upload response for {tr_filename}"))
 
-    return {
+    return operation_success({
         "wikipage_url": wikifile_url,
         "file_link": file_link
-    }
+    })
 
 
 def get_localized_wikitext(wikitext, src_endpoint, target_lang):
@@ -103,6 +107,7 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                                 template.add("Article", langlink["title"])
                                 break
                     except:
+                        log_exception("Failed to retrieve language links for %s", article_title)
                         return str(wikicode)
 
     return str(wikicode)
