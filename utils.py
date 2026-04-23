@@ -29,7 +29,9 @@ def download_image(src_project, src_lang, src_filename):
 
     # Download the Image File
     r = requests.get(image_url, allow_redirects=True)
-    filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
+    content_type = r.headers.get('content-type') or 'image/jpeg'
+    file_ext = content_type.replace('image/', '').split(';')[0].strip()
+    filename = get_filename + "." + file_ext
     open("temp_images/" + filename, 'wb').write(r.content)
 
     return filename
