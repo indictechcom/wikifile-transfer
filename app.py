@@ -12,11 +12,12 @@ import os
 import yaml
 import re
 import urllib.parse
-from model import db, User
+from model import db, User, UploadTask
 import logging
 from celeryWorker import app as celery_app
 from tasks import upload_image_task, batch_upload_task
 from celery.result import AsyncResult
+from routes.stats import stats_bp
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -52,6 +53,9 @@ MW_OAUTH = MWOAuth(
     user_agent= getHeader()['User-Agent']
 )
 app.register_blueprint(MW_OAUTH.bp)
+
+# Register upload analytics blueprint
+app.register_blueprint(stats_bp, url_prefix='/api/upload')
 
 
 @app.route('/index', methods=['GET'])
