@@ -12,6 +12,8 @@ import {
   FormControl,
   InputLabel,
   CircularProgress,
+  LinearProgress,
+  Alert,
 } from "@mui/material";
 
 import { useNavigate } from "react-router-dom";
@@ -41,6 +43,8 @@ function Upload() {
   const [project, setProject] = useState("");
   const [language, setLanguage] = useState("");
   const [targetFileName, setTargetFileName] = useState("");
+  const [uploadProgress, setUploadProgress] = useState(0);
+  const [taskMessage, setTaskMessage] = useState("");
   const [uploadStatus, setUploadStatus] = useState({ type: null, data: null });
   const [pageContent, setPageContent] = useState("");
 
@@ -81,6 +85,8 @@ function Upload() {
     };
 
     setLoading(true);
+    setUploadProgress(0);
+    setTaskMessage("");
     backendApi
       .post("/api/upload", payload)
       .then((response) => {
@@ -106,18 +112,24 @@ function Upload() {
       backendApi
         .get(`/api/task_status/${taskId}`)
         .then((response) => {
-          const { status, result, error } = response.data;
+          const { state, progress, message, result } = response.data;
 
-          if (status === "SUCCESS") {
+          // Update progress bar and message on every tick
+          setUploadProgress(progress ?? 0);
+          setTaskMessage(message || "");
+
+          if (state === "SUCCESS") {
             clearInterval(interval);
             setUploadStatus({ type: "success", data: result });
             setLoading(false);
             setError(null);
+            setUploadProgress(100);
             setActiveStep((prevStep) => prevStep + 1);
-          } else if (status === "FAILURE") {
+          } else if (state === "FAILURE") {
             clearInterval(interval);
             setLoading(false);
-            setError(error || t("task-failed-processing"));
+            setUploadProgress(0);
+            setError(message || t("task-failed-processing"));
           }
         })
         .catch((pollError) => {
@@ -292,13 +304,15 @@ function Upload() {
       )}
 
       {error && (
-        <Typography
-          color="error"
-          variant="body2"
-          sx={{ textAlign: "center", mt: 2 }}
-        >
+        <Alert severity="error" sx={{ mt: 2 }}>
           {error}
-        </Typography>
+        </Alert>
+      )}
+
+      {!error && uploadStatus.type === "success" && activeStep === steps.length - 1 && (
+        <Alert severity="success" sx={{ mt: 2 }}>
+          {taskMessage || "File uploaded successfully!"}
+        </Alert>
       )}
 
       {showResult ? (
@@ -457,8 +471,20 @@ function Upload() {
                 disabled={loading}
               />
               {loading && (
-                <Box display="flex" justifyContent="center" mt={2}>
-                  <CircularProgress />
+                <Box mt={3}>
+                  <Box display="flex" justifyContent="space-between" mb={0.5}>
+                    <Typography variant="body2" color="text.secondary">
+                      {taskMessage || t("uploading") || "Uploading..."}
+                    </Typography>
+                    <Typography variant="body2" color="text.secondary">
+                      {uploadProgress}%
+                    </Typography>
+                  </Box>
+                  <LinearProgress
+                    variant="determinate"
+                    value={uploadProgress}
+                    sx={{ height: 8, borderRadius: 4 }}
+                  />
                 </Box>
               )}
             </>
