@@ -30,8 +30,9 @@ const Header = () => {
     setValue(newValue);
     if (newValue === 0) navigate("/");
     else if (isLoggedIn && newValue === 1) navigate("/upload");
-    else if (isLoggedIn && newValue === 2) navigate("/preferences");
-    else if (newValue === (isLoggedIn ? 3 : 1)) navigate("/about");
+    else if (isLoggedIn && newValue === 2) navigate("/batch-upload");
+    else if (isLoggedIn && newValue === 3) navigate("/preferences");
+    else if (newValue === (isLoggedIn ? 4 : 1)) navigate("/about");
   };
 
   const handleLogout = () => {
@@ -46,10 +47,11 @@ const Header = () => {
   const location = useLocation();
 
   useEffect(() => {
-    if (location.pathname === "/") setValue(0);
-    else if (location.pathname === "/upload") setValue(1);
-    else if (location.pathname === "/preferences") setValue(2);
-    else if (location.pathname === "/about") setValue(isLoggedIn ? 3 : 1);
+    if (location.pathname === "/")             setValue(0);
+    else if (location.pathname === "/upload")  setValue(1);
+    else if (location.pathname === "/batch-upload") setValue(2);
+    else if (location.pathname === "/preferences") setValue(isLoggedIn ? 3 : 0);
+    else if (location.pathname === "/about")   setValue(isLoggedIn ? 4 : 1);
   }, [location, isLoggedIn]);
 
   const handleLanguageChange = (event) => {
@@ -80,6 +82,7 @@ const Header = () => {
           <Tabs value={value} onChange={handleChange} textColor="inherit">
             <Tab label={t('home')} />
             {isLoggedIn && <Tab label={t('upload')} />}
+            {isLoggedIn && <Tab label="Batch Upload" />}
             {isLoggedIn && <Tab label={t('preference')} />}
             <Tab label={t('about')}  />
           </Tabs>
