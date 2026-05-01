@@ -13,16 +13,28 @@ import yaml
 import re
 import urllib.parse
 from model import db, User
-import logging
+from exceptions import WikifileError, DownloadError, UploadError
 from celeryWorker import app as celery_app
 from tasks import upload_image_task
 from celery.result import AsyncResult
+from logging_config import setup_logging, get_logger
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Setup structured, rotating file-based logging
+setup_logging()
+logger = get_logger(__name__)
 
 app = Flask(__name__)
+
+# Global error handler for unhandled exceptions
+@app.errorhandler(Exception)
+def handle_unhandled_exception(error):
+    """Catch-all handler for unexpected exceptions."""
+    logger.exception(f"Unhandled exception occurred: {str(error)}")
+    return jsonify({
+        "success": False,
+        "data": {},
+        "errors": ["An unexpected error occurred. Please try again."]
+    }), 500
 
 # Load configuration from YAML file
 __dir__ = os.path.dirname(__file__)
@@ -73,7 +85,14 @@ def upload():
         src_fileext = src_filename.split('.')[-1]
 
         # Downloading the source file and getting saved file name
-        downloaded_filename = download_image(src_project, src_lang, src_filename)
+        try:
+            downloaded_filename = download_image(src_project, src_lang, src_filename)
+        except DownloadError as e:
+            logger.error(f"Download failed: {str(e)}")
+            return jsonify({"success": False, "data": {}, "errors": [str(e)]}), 400
+        except Exception as e:
+            logger.exception(f"Unexpected error during download: {str(e)}")
+            return jsonify({"success": False, "data": {}, "errors": ["Internal server error during download."]}), 500
 
         # Getting Target Details
         tr_project = data.get('trproject')
@@ -92,7 +111,15 @@ def upload():
 
             if file_size < 50 * 1024 * 1024:  # 50 MB
                 # Process synchronously
-                resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+                try:
+                    resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+                except UploadError as e:
+                    logger.warning(f"Upload failed: {str(e)}")
+                    return jsonify({"success": False, "data": {}, "errors": [str(e)]}), 400
+                except Exception as e:
+                    logger.exception(f"Unexpected error during upload: {str(e)}")
+                    return jsonify({"success": False, "data": {}, "errors": ["Critical internal server error."]}), 500
+
                 if resp is None:
                     return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
 
@@ -112,7 +139,7 @@ def upload():
                     "secret": session['mwoauth_access_token']['secret']
                 }
                 task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
-                return jsonify({"success": True, "task_id": task.id}), 202
+                return jsonify({"success": True, "data": {"task_id": task.id}, "errors": []}), 202
         else:
             return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
     else:
@@ -142,7 +169,7 @@ def preference():
                     "lang": user_lang,
                     "skip_upload_selection": skip_upload_selection
                 },
-                "error": []
+                "errors": []
             }), 200
 
     elif request.method == 'POST':
@@ -172,8 +199,9 @@ def preference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception as e:
             db.session.rollback()
+            logger.error(f"Database commit failed: {str(e)}")
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
     else:
@@ -195,7 +223,7 @@ def languagePreference():
                 "data": {
                     "user_language": user_language
                 },
-                "error": []
+                "errors": []
             }), 200
 
     elif request.method == 'POST':
@@ -214,8 +242,9 @@ def languagePreference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception as e:
             db.session.rollback()
+            logger.error(f"Database update failed: {str(e)}")
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
     else:
@@ -231,7 +260,7 @@ def get_wikitext():
 
     # In any case, return the strings only with 200 status code
     if not all([src_lang, src_project, src_filename, tr_lang]):
-        return jsonify({"wikitext": ""}), 200
+        return jsonify({"success": True, "data": {"wikitext": ""}, "errors": []}), 200
 
     src_endpoint = f"https://{src_lang}.{src_project}.org/w/api.php"
     content_params = {
@@ -255,11 +284,12 @@ def get_wikitext():
             wikitext = page_data[0]["revisions"][0]["slots"]["main"]["content"]
             wikitext = get_localized_wikitext(wikitext, src_endpoint, tr_lang)
 
-            return jsonify({"wikitext": wikitext}), 200
+            return jsonify({"success": True, "data": {"wikitext": wikitext}, "errors": []}), 200
         else:
-            return jsonify({"wikitext": ""}), 200
-    except:
-        return jsonify({"wikitext": ""}), 200
+            return jsonify({"success": True, "data": {"wikitext": ""}, "errors": []}), 200
+    except Exception as e:
+        logger.warning(f"Failed to fetch wikitext for {src_filename}: {str(e)}")
+        return jsonify({"success": True, "data": {"wikitext": ""}, "errors": []}), 200
 
 
 @app.route('/api/edit_page', methods=['POST'])
