@@ -15,7 +15,7 @@ import urllib.parse
 from model import db, User
 import logging
 from celeryWorker import app as celery_app
-from tasks import upload_image_task
+from tasks import upload_image_task, batch_upload_task
 from celery.result import AsyncResult
 
 # Configure logging
@@ -317,21 +317,142 @@ def get_base_variables():
         "username": MW_OAUTH.get_current_user(True)
     }), 200
 
+@app.route('/api/batch_upload', methods=['POST'])
+def batch_upload():
+    """
+    Accept a batch of source URLs and kick off a single Celery task
+    that processes all files sequentially.
+
+    Request JSON:
+        {
+          "items": [{"srcUrl": str, "trFilename": str}, ...],
+          "trproject": str,
+          "trlang": str
+        }
+
+    Response 202:
+        { "success": true, "task_id": str }
+    """
+    if request.method != 'POST':
+        return jsonify({"success": False, "errors": ["Invalid Request"]}), 400
+
+    data = request.get_json()
+    items_raw = data.get('items', [])
+    tr_project = data.get('trproject')
+    tr_lang = data.get('trlang')
+
+    # Basic validation
+    if not items_raw or not isinstance(items_raw, list):
+        return jsonify({"success": False, "errors": ["items must be a non-empty list"]}), 400
+    if len(items_raw) > 20:
+        return jsonify({"success": False, "errors": ["Maximum 20 files per batch"]}), 400
+    if not tr_project or not tr_lang:
+        return jsonify({"success": False, "errors": ["trproject and trlang are required"]}), 400
+
+    # Authenticate session
+    ses = authenticated_session()
+    if ses is None:
+        return jsonify({"success": False, "errors": ["Not authenticated"]}), 401
+
+    tr_endpoint = f"https://{tr_lang}.{tr_project}.org/w/api.php"
+
+    # Parse each item into the shape the Celery task expects
+    items = []
+    for raw in items_raw:
+        src_url = urllib.parse.unquote(raw.get('srcUrl', ''))
+        if not src_url or '/wiki/' not in src_url:
+            return jsonify({"success": False, "errors": [f"Invalid srcUrl: {src_url}"]}), 400
+
+        match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+        if not match:
+            return jsonify({"success": False, "errors": [f"Could not parse srcUrl: {src_url}"]}), 400
+
+        src_lang = match[0][0]
+        src_project = match[0][1]
+        src_filename = src_url.split('/')[-1]
+        tr_filename = urllib.parse.unquote(raw.get('trFilename', '') or src_filename.split('.')[-2])
+
+        items.append({
+            "srcUrl": src_url,
+            "srcLang": src_lang,
+            "srcProject": src_project,
+            "srcFilename": src_filename,
+            "trFilename": tr_filename,
+        })
+
+    OAuthObj = {
+        "consumer_key": CONSUMER_KEY,
+        "consumer_secret": CONSUMER_SECRET,
+        "key": session['mwoauth_access_token']['key'],
+        "secret": session['mwoauth_access_token']['secret'],
+    }
+
+    task = batch_upload_task.delay(items, tr_project, tr_lang, tr_endpoint, OAuthObj)
+    return jsonify({"success": True, "task_id": task.id}), 202
+
+
 @app.route('/api/task_status/<task_id>', methods=['GET'])
 def get_task_status(task_id):
     """
     Endpoint to get the status and result of a Celery task.
+    Works for both single-file uploads and batch uploads.
+    Returns: { state, progress (0-100), message, [current, total, results] }
     """
     task = AsyncResult(task_id, app=celery_app)
-    response = {
-        "task_id": task_id,
-        "status": task.status,
-        "result": task.result if task.successful() else None,
-    }
-    
-    # If task failed, include error information
-    if task.failed():
-        response["error"] = str(task.result)
+    state = task.state
+
+    if state == 'PENDING':
+        response = {
+            "state": state,
+            "progress": 0,
+            "message": "Task is waiting to be processed..."
+        }
+    elif state == 'PROGRESS':
+        meta = task.info or {}
+        response = {
+            "state": state,
+            "progress": meta.get("progress", 0),
+            "message": meta.get("message", "Processing..."),
+            # Batch-specific fields (absent for single-file tasks)
+            "current": meta.get("current"),
+            "total": meta.get("total"),
+            "results": meta.get("results"),
+        }
+    elif state == 'SUCCESS':
+        result = task.result or {}
+        # Distinguish batch result (has 'results' key) from single-file result
+        if isinstance(result, dict) and "results" in result:
+            response = {
+                "state": state,
+                "progress": 100,
+                "message": "Batch upload completed",
+                "results": result.get("results", []),
+                "total": result.get("total"),
+                "succeeded": result.get("succeeded"),
+                "failed": result.get("failed"),
+            }
+        else:
+            response = {
+                "state": state,
+                "progress": 100,
+                "message": "Upload completed successfully",
+                "result": result.get("data") if isinstance(result, dict) else result,
+            }
+    elif state == 'FAILURE':
+        error_info = task.info
+        response = {
+            "state": state,
+            "progress": 0,
+            "message": str(error_info) if error_info else "Upload failed"
+        }
+    else:
+        # STARTED, RETRY, REVOKED, etc.
+        meta = task.info or {}
+        response = {
+            "state": state,
+            "progress": meta.get("progress", 0) if isinstance(meta, dict) else 0,
+            "message": meta.get("message", state) if isinstance(meta, dict) else state
+        }
 
     return jsonify(response), 200
 
