@@ -3,29 +3,41 @@ import requests
 import requests_oauthlib
 import os
 
+def get_headers():
+    return {
+        'User-Agent': 'Wikifile-transfer/1.0 (https://wikifile-transfer.toolforge.org; 0freerunning@gmail.com)'
+    }
+
 @app.task(bind=True)
 def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj):
     ses = requests_oauthlib.OAuth1(
         client_key=OAuthObj["consumer_key"],
-        client_secret= OAuthObj["consumer_secret"],
+        client_secret=OAuthObj["consumer_secret"],
         resource_owner_key=OAuthObj["key"],
         resource_owner_secret=OAuthObj["secret"]
     )
+
     self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100})
-    
-    # API Parameter to get CSRF Token
+
+    # Get CSRF Token
     csrf_param = {
         "action": "query",
         "meta": "tokens",
         "format": "json"
     }
 
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
+    response = requests.get(
+        url=tr_endpoint,
+        params=csrf_param,
+        auth=ses,
+        headers=get_headers(),
+        timeout=10
+    )
     csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
     self.update_state(state='PROGRESS', meta={'current': 25, 'total': 100})
 
-    # API Parameter to upload the file
+    # Upload file
     upload_param = {
         "action": "upload",
         "filename": tr_filename + "." + src_fileext,
@@ -34,16 +46,21 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         "ignorewarnings": 1
     }
 
-    # Read the file for POST request
     file = {
         'file': open(file_path, 'rb')
     }
 
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    response = requests.post(
+        url=tr_endpoint,
+        files=file,
+        data=upload_param,
+        auth=ses,
+        headers=get_headers(),
+        timeout=10
+    ).json()
 
     self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
 
-    # Try block to get Link and URL
     try:
         wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
         file_link = response["upload"]["imageinfo"]["url"]
