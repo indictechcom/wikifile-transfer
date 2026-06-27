@@ -321,17 +321,48 @@ def get_base_variables():
 def get_task_status(task_id):
     """
     Endpoint to get the status and result of a Celery task.
+    Returns: { state, progress (0-100), message }
     """
     task = AsyncResult(task_id, app=celery_app)
-    response = {
-        "task_id": task_id,
-        "status": task.status,
-        "result": task.result if task.successful() else None,
-    }
-    
-    # If task failed, include error information
-    if task.failed():
-        response["error"] = str(task.result)
+    state = task.state
+
+    if state == 'PENDING':
+        response = {
+            "state": state,
+            "progress": 0,
+            "message": "Task is waiting to be processed..."
+        }
+    elif state == 'PROGRESS':
+        meta = task.info or {}
+        response = {
+            "state": state,
+            "progress": meta.get("progress", 0),
+            "message": meta.get("message", "Processing...")
+        }
+    elif state == 'SUCCESS':
+        result = task.result or {}
+        response = {
+            "state": state,
+            "progress": 100,
+            "message": "Upload completed successfully",
+            "result": result.get("data") if isinstance(result, dict) else result
+        }
+    elif state == 'FAILURE':
+        # task.info holds the exception when Celery sets FAILURE
+        error_info = task.info
+        response = {
+            "state": state,
+            "progress": 0,
+            "message": str(error_info) if error_info else "Upload failed"
+        }
+    else:
+        # STARTED, RETRY, REVOKED, etc.
+        meta = task.info or {}
+        response = {
+            "state": state,
+            "progress": meta.get("progress", 0) if isinstance(meta, dict) else 0,
+            "message": meta.get("message", state) if isinstance(meta, dict) else state
+        }
 
     return jsonify(response), 200
 
