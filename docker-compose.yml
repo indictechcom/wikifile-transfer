@@ -8,6 +8,7 @@ services:
       - "5001:5000"
     volumes:
       - .:/app
+      - ./logs:/app/logs
     depends_on:
       - redis
       - worker
@@ -19,6 +20,7 @@ services:
     restart: always
     volumes:
       - .:/app
+      - ./logs:/app/logs
     depends_on:
       - redis
 
