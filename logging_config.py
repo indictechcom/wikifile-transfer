@@ -9,9 +9,12 @@ def setup_logging(app=None, log_dir=None):
     Returns the absolute path of the logfile created.
     """
     # Determine log directory
+    default_log_dir = os.path.join(os.getcwd(), 'logs')
+
     if app is not None:
-        log_dir = app.config.get('LOG_DIR', log_dir or '/app/logs')
-    log_dir = log_dir or '/app/logs'
+        log_dir = app.config.get('LOG_DIR', log_dir or default_log_dir)
+    else:
+        log_dir = log_dir or default_log_dir
     
     # Create log directory
     os.makedirs(log_dir, exist_ok=True)

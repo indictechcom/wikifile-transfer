@@ -3,7 +3,7 @@ import os
 from logging_config import setup_logging
 
 # Attach rotating-file handler for worker processes as well
-setup_logging(None, log_dir=os.environ.get("LOG_DIR", "/app/logs"))
+setup_logging(None, log_dir=os.environ.get("LOG_DIR"))
 
 # Use environment variables
 PRODUCTION = False
