@@ -1,7 +1,7 @@
 from celeryWorker import app
 import requests
 import requests_oauthlib
-import os
+from loggings import log_exception,log_info
 
 @app.task(bind=True)
 def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj):
@@ -40,6 +40,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
     }
 
     response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    log_info("Upload response for %s: %s", tr_filename, response)
 
     self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
 
@@ -48,6 +49,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
         file_link = response["upload"]["imageinfo"]["url"]
     except KeyError:
+        log_exception("Failed to retrieve upload results for %s", tr_filename)
         return {"success": False, "data": {}, "errors": ["Upload failed"]}
 
     self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100})

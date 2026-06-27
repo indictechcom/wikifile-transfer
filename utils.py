@@ -2,7 +2,7 @@ import datetime
 import requests
 import mwparserfromhell
 from templatelist import TEMPLATES
-
+from loggings import log_exception
 def download_image(src_project, src_lang, src_filename):
     src_endpoint = "https://"+ src_lang + "." + src_project + ".org/w/api.php"
 
@@ -20,6 +20,7 @@ def download_image(src_project, src_lang, src_filename):
     try:
         image_url = list (page.values()) [0]["imageinfo"][0]["url"]
     except KeyError:
+        log_exception("Failed to retrieve image URL for %s", src_filename)
         return None
 
     # Create a unique file name based on time
@@ -59,6 +60,7 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     file = {
         'file': open(file_path, 'rb')
     }
+    
 
     response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
 
@@ -67,6 +69,7 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
         wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
         file_link = response["upload"]["imageinfo"]["url"]
     except KeyError:
+        log_exception("Failed to retrieve upload results for %s", tr_filename)
         return None
 
     return {
@@ -103,6 +106,7 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                                 template.add("Article", langlink["title"])
                                 break
                     except:
+                        log_exception("Failed to retrieve language links for %s", article_title)
                         return str(wikicode)
 
     return str(wikicode)
