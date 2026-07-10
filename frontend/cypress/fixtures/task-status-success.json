@@ -1,0 +1,8 @@
+{
+  "task_id": "test-task-123",
+  "status": "SUCCESS",
+  "result": {
+    "wikipage_url": "https://en.wikipedia.org/wiki/File:TestImage.jpg",
+    "file_link": "https://upload.wikimedia.org/wikipedia/en/a/a1/TestImage.jpg"
+  }
+}

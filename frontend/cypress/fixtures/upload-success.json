@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "wikipage_url": "https://en.wikipedia.org/wiki/File:TestImage.jpg",
+    "file_link": "https://upload.wikimedia.org/wikipedia/en/a/a1/TestImage.jpg",
+    "source": "https://commons.wikimedia.org/wiki/File:TestImage.jpg"
+  },
+  "errors": []
+}

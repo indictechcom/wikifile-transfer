@@ -1,0 +1,9 @@
+{
+  "success": true,
+  "data": {
+    "project": "wikipedia",
+    "lang": "en",
+    "skip_upload_selection": false
+  },
+  "error": []
+}
