@@ -30,7 +30,10 @@
     "build:cleanup": "rm -rf ../templates/index.html ../static/js  ../static/css ../static/media",
     "build:toolforge": "react-scripts build && cp build/index.html ../templates/index.html && cp -r build/static/* ../static/",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "cy:open": "cypress open",
+    "cy:run:e2e": "cypress run --e2e",
+    "cy:run:ct": "cypress run --component"
   },
   "eslintConfig": {
     "extends": [
@@ -49,5 +52,9 @@
       "last 1 firefox version",
       "last 1 safari version"
     ]
+  },
+  "devDependencies": {
+    "cypress": "^15.18.1",
+    "webpack-dev-server": "^5.2.6"
   }
 }
