@@ -2,134 +2,31 @@ name: Cypress Tests
 
 on:
   push:
-    branches: [master]
+    branches: master
   pull_request:
-    branches: [master]
+    branches: master
+  workflow_dispatch: 
 
 jobs:
-  # ──────────────────────────────────────────────────
-  # E2E Tests — requires Flask backend + Redis
-  # ──────────────────────────────────────────────────
-  cypress-e2e:
+  cypress-run:
     runs-on: ubuntu-latest
-    name: E2E Tests
-
-    services:
-      redis:
-        image: redis:alpine
-        ports:
-          - 6379:6379
-        options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
 
     steps:
-      - name: Checkout repository
+      - name: Checkout Code 🛎
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-          cache: 'pip'
-
-      - name: Setup Node.js
+      - name: Setup Node.js 🖨️
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
 
-      - name: Install Python dependencies
-        run: pip install -r requirements.txt
-
-      - name: Install frontend dependencies
-        working-directory: frontend
-        run: npm ci
-
-      # Create a CI-specific config.yaml that uses localhost Redis
-      - name: Configure backend for CI
-        run: |
-          cat > config.yaml << 'EOF'
-          ENV: dev
-          SECRET_KEY: ci-test-key
-          CONSUMER_KEY: test-consumer-key
-          CONSUMER_SECRET: test-consumer-secret
-          OAUTH_MWURI: https://meta.wikimedia.org/w
-          SESSION_COOKIE_SECURE: False
-          SESSION_REFRESH_EACH_REQUEST: False
-          PREFERRED_URL_SCHEME: http
-          SQLALCHEMY_DATABASE_URI: sqlite:///app.db
-          SQLALCHEMY_TRACK_MODIFICATIONS: False
-          CELERY_BROKER_URL: redis://localhost:6379/0
-          CELERY_RESULT_BACKEND: redis://localhost:6379/0
-          REDIS_URL: redis://localhost:6379/0
-          UPLOAD_FOLDER: temp_images
-          LOG_DIR: logs
-          HOST: 0.0.0.0
-          PORT: 5001
-          DEBUG: True
-          EOF
-
-      - name: Create required directories
-        run: |
-          mkdir -p temp_images logs
-
-      # Initialize the SQLite database
-      - name: Initialize database
-        run: |
-          python -c "
-          from app import app, db
-          with app.app_context():
-              db.create_all()
-          "
-
-      # Start Flask backend on port 5001
-      - name: Start Flask backend
-        run: |
-          python -c "
-          from app import app
-          app.run(host='0.0.0.0', port=5001)
-          " &
-        env:
-          FLASK_ENV: development
-
-      # Start Celery worker
-      - name: Start Celery worker
-        run: |
-          celery -A celeryWorker worker --loglevel=info &
-
-      # Start React dev server on port 3000
-      - name: Start React dev server
-        working-directory: frontend
-        run: npm start &
-        env:
-          BROWSER: none
-          PORT: 3000
-
-      # Wait for both servers to be ready before running tests
-      - name: Wait for servers
-        run: |
-          npx -y wait-on http://localhost:5001/ http://localhost:3000 --timeout 120000
-
-      - name: Run Cypress E2E Tests
-        working-directory: frontend
-        run: npx cypress run --e2e
-
-      - name: Upload screenshots on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
+      - name: Run Cypress Tests 🧪
+        uses: cypress-io/github-action@v6
         with:
-          name: cypress-e2e-screenshots
-          path: frontend/cypress/screenshots
-          retention-days: 7
-
-      - name: Upload videos on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: cypress-e2e-videos
-          path: frontend/cypress/videos
-          retention-days: 7
+          working-directory: frontend
+          
+          start: npm start
+          
+          wait-on: 'http://localhost:3000'
+          
+          wait-on-timeout: 120
