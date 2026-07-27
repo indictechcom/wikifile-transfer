@@ -1,0 +1,25 @@
+{
+	"@metadata": {
+		"authors": [
+			"Dr Lotus Black"
+		]
+	},
+	"home": "ပင်မ",
+	"upload": "တင်ရန်",
+	"preference": "​ရွေး​ချယ်​စ​ရာ​များ​",
+	"about": "အကြောင်း",
+	"login": "အကောင့်ထဲဝင်ရန်",
+	"logout": "အကောင့်မှပြန်ထွက်",
+	"login-to-upload-images": "ပုံများတင်ရန် အကောင့်ဝင်ပါ",
+	"start-uploading": "အပ်လုဒ်တင်ခြင်း စတင်ပါ",
+	"about-the-tool": "ကိရိယာအကြောင်း",
+	"learn-more": "ပိုမို လေ့လာရန်",
+	"tool-source": "ရင်းမြစ်",
+	"authors": "စာရေးသူများ",
+	"back-to-home": "ပင်မသို့ ပြန်သွားရန်",
+	"my-preferences": "ကျွန်ုပ်၏ ဦးစားပေးမှုများ",
+	"go-back-to-home": "ပင်မသို့ ပြန်သွားရန်",
+	"source-url-placeholder": "ဥပမာ- https://en.wikipedia.org/wiki/File:ABCD.jpg",
+	"target-file-name-placeholder": "ဥပမာ- ABCD",
+	"copy": "မိတ္တူကူး"
+}
