@@ -103,11 +103,9 @@ describe('UI to Redux store', { retries: 2 }, () => {
       cy.wait('@getUser');
 
       // Drive the application by directly dispatching Redux actions
-      getStore().then((store) => {
-        store.dispatch({
-          type: 'userAuth/setUserSuccess',
-          payload: { logged: true, username: 'HackerUser' },
-        });
+      getStore().invoke('dispatch', {
+        type: 'userAuth/setUserSuccess',
+        payload: { logged: true, username: 'HackerUser' },
       });
 
       // Assert the store updated
@@ -119,9 +117,7 @@ describe('UI to Redux store', { retries: 2 }, () => {
         });
 
       // Drive a reset
-      getStore().then((store) => {
-        store.dispatch({ type: 'userAuth/resetUser' });
-      });
+      getStore().invoke('dispatch', { type: 'userAuth/resetUser' });
 
       // Assert the store cleared
       getStoreState().its('auth.username').should('be.null');
@@ -136,11 +132,9 @@ describe('UI to Redux store', { retries: 2 }, () => {
       cy.contains('button', 'Login').should('be.visible');
       cy.get('.MuiAvatar-root').should('not.exist');
 
-      getStore().then((store) => {
-        store.dispatch({
-          type: 'userAuth/setUserSuccess',
-          payload: { logged: true, username: 'ReduxUser' },
-        });
+      getStore().invoke('dispatch', {
+        type: 'userAuth/setUserSuccess',
+        payload: { logged: true, username: 'ReduxUser' },
       });
       
       cy.get('.MuiAvatar-root').should('be.visible').and('contain.text', 'R');
