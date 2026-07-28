@@ -5,6 +5,7 @@ describe('Upload Workflow: Asynchronous (Polling)', () => {
   const TASK_ID = 'test-task-123';
 
   beforeEach(() => {
+    cy.stubAppBoot();
     cy.setAuthState(true);
     cy.stubWikimediaFileCheck(false);
     cy.intercept('GET', '**/api/preference', { fixture: 'user/preferences-skip.json' });
@@ -24,7 +25,7 @@ describe('Upload Workflow: Asynchronous (Polling)', () => {
     // 1st Poll -> Pending
     cy.stubTaskStatus(TASK_ID, 'upload/task-status-pending.json');
     cy.contains('button', /Upload file/i).click();
-    cy.get('.MuiCircularProgress-root').should('be.visible');
+    cy.get('[role="progressbar"]').should('be.visible');
 
     // 2nd Poll -> Success
     cy.stubTaskStatus(TASK_ID, 'upload/task-status-success.json');

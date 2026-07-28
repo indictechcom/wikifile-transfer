@@ -4,6 +4,7 @@ describe('Upload Workflow: Synchronous', () => {
   const URL = 'https://en.wikipedia.org/wiki/File:Example.jpg';
 
   beforeEach(() => {
+    cy.stubAppBoot();
     cy.setAuthState(true);
     cy.stubWikimediaFileCheck(false);
     cy.stubUpload('upload/success-sync.json');

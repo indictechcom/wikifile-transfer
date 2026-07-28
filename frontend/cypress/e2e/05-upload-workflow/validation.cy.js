@@ -2,6 +2,7 @@ import { visitHashRoute } from '../../support/utils';
 
 describe('Upload Workflow: Validations & Errors', () => {
   beforeEach(() => {
+    cy.stubAppBoot();
     cy.setAuthState(true);
     visitHashRoute('/upload');
   });
@@ -19,8 +20,13 @@ describe('Upload Workflow: Validations & Errors', () => {
     
     cy.get('input[type="text"]').first().type('https://en.wikipedia.org/wiki/File:Bad.jpg');
     cy.contains('button', /next/i).click();
+
+    // Verify we advanced to step 2 before clicking Next again
+    cy.contains(/select project/i).should('be.visible');
     cy.contains('button', /next/i).click();
     
+    // Verify we advanced to step 3
+    cy.contains(/name of the target file/i).should('be.visible');
     cy.contains('button', /Upload file/i).click();
     cy.wait('@uploadError');
     cy.contains('An error occurred during upload').should('be.visible');

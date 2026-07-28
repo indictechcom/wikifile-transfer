@@ -1,3 +1,6 @@
+/**
+ * Visits a hash route and waits for the layout to mount.
+ */
 export const visitHashRoute = (route = '/') => {
   cy.visit(`/#${route}`);
   // Wait for the main layout to mount
@@ -19,6 +22,9 @@ export const selectMuiDropdown = (labelText, optionText) => {
     .click();
 };
 
+/**
+ * Helper to type text into a standard MUI text input.
+ */
 export const typeInMuiInput = (labelText, textToType) => {
   cy.contains('label', labelText)
     .parent()

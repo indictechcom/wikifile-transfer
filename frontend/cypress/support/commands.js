@@ -1,28 +1,8 @@
-// ***********************************************
-// This example commands.js shows you how to
-// create various custom commands and overwrite
-// existing commands.
-//
-// For more comprehensive examples of custom
-// commands please read more here:
-// https://on.cypress.io/custom-commands
-// ***********************************************
-//
-//
-// -- This is a parent command --
-// Cypress.Commands.add('login', (email, password) => { ... })
-//
-//
-// -- This is a child command --
-// Cypress.Commands.add('drag', { prevSubject: 'element'}, (subject, options) => { ... })
-//
-//
-// -- This is a dual command --
-// Cypress.Commands.add('dismiss', { prevSubject: 'optional'}, (subject, options) => { ... })
-//
-//
-// -- This will overwrite an existing command --
-// Cypress.Commands.overwrite('visit', (originalFn, url, options) => { ... })
+/**
+ * Custom Cypress commands for WikiFile Transfer E2E tests.
+ *
+ * @see ../../../custom-commands.d.ts for TypeScript definitions.
+ */
 
 Cypress.Commands.add('setAuthState', (isLoggedIn = true, username = 'TestUser') => {
   // Use inline body so we can dynamically inject any username (fixes the 'W' vs 'T' avatar issue)
@@ -47,7 +27,7 @@ Cypress.Commands.add('stubUpload', (fixturePath, statusCode = 200) => {
 });
 
 Cypress.Commands.add('stubWikimediaFileCheck', (exists = false) => {
-  cy.intercept('GET', 'https://*.wikipedia.org/w/api.php?action=query*', {
+  cy.intercept('GET', '**/w/api.php?action=query*', {
     statusCode: 200,
     body: { query: { pages: { '-1': { ns: 6, title: 'File:TestFile.jpg', ...(exists ? {} : { missing: '' }) } } } }
   }).as('wikimediaFileCheck');

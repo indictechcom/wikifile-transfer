@@ -2,6 +2,7 @@ import { visitHashRoute, selectMuiDropdown } from '../../support/utils';
 
 describe('Preferences Form', () => {
   beforeEach(() => {
+    cy.stubAppBoot();
     cy.setAuthState(true);
 
     cy.intercept('POST', '**/api/preference', { 
@@ -27,5 +28,20 @@ describe('Preferences Form', () => {
     });
 
     cy.contains('Preferences saved successfully').should('be.visible');
+  });
+
+  it('shows error feedback when save fails', () => {
+    cy.intercept('POST', '**/api/preference', {
+      statusCode: 500,
+      body: { success: false, errors: ['Database Error'] }
+    }).as('savePrefsError');
+
+    cy.contains('button', 'Save').click();
+    cy.wait('@savePrefsError');
+  });
+
+  it('navigates back to home on cancel', () => {
+    cy.contains('button', 'Cancel').click();
+    cy.url().should('include', '/');
   });
 });

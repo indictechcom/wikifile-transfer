@@ -1,6 +1,15 @@
 import { visitHashRoute } from '../../support/utils';
 
 describe('Navigation & Routing', () => {
+  beforeEach(() => {
+    cy.stubAppBoot();
+  });
+
+  it('navigates to the about page', () => {
+    visitHashRoute('/about');
+    cy.contains('About').should('be.visible');
+  });
+
   it('loads home page and shows welcome text', () => {
     visitHashRoute('/');
     cy.contains('Welcome to the Wikifile-transfer tool page!').should('be.visible');

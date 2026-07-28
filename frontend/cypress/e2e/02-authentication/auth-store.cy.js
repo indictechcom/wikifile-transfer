@@ -12,7 +12,7 @@ describe('UI to Redux store', { retries: 2 }, () => {
   const getStoreState = () => getStore().invoke('getState');
 
   beforeEach(() => {
-    // Uses the global setup we configured
+    // Stub API endpoints for app boot
     cy.stubAppBoot();
   });
 

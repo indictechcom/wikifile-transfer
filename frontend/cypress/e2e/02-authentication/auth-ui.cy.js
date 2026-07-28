@@ -1,6 +1,10 @@
 import { visitHashRoute } from '../../support/utils';
 
 describe('Authentication UI', () => {
+  beforeEach(() => {
+    cy.stubAppBoot();
+  });
+
   it('displays correct UI elements when logged out', () => {
     cy.setAuthState(false);
     visitHashRoute('/');
