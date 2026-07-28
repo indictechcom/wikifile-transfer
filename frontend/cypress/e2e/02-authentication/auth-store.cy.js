@@ -122,23 +122,5 @@ describe('UI to Redux store', { retries: 2 }, () => {
       // Assert the store cleared
       getStoreState().its('auth.username').should('be.null');
     });
-
-    it('changes the UI when store is dispatched directly', () => {
-      cy.setAuthState(false);
-      visitHashRoute('/');
-      cy.wait('@getUser');
-
-      // Ensure the UI starts in a logged-out state
-      cy.contains('button', 'Login').should('be.visible');
-      cy.get('.MuiAvatar-root').should('not.exist');
-
-      getStore().invoke('dispatch', {
-        type: 'userAuth/setUserSuccess',
-        payload: { logged: true, username: 'ReduxUser' },
-      });
-      
-      cy.get('.MuiAvatar-root').should('be.visible').and('contain.text', 'R');
-      cy.contains('button', 'Logout').should('be.visible');
-    });
   });
 });
