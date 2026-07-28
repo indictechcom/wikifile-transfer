@@ -1,13 +1,19 @@
-// ***********************************************
-// E2E Support File for WikiFile-Transfer
-//
-// Loaded automatically before every E2E spec.
-// ***********************************************
+// Global configuration and behavior that modifies Cypress.
+// Read more here: https://on.cypress.io/configuration
 
+// Import commands.js using ES2015 syntax:
 import './commands';
 
-// Stub the most common API calls before every test so
-// the app can boot without hitting the real backend.
-beforeEach(() => {
-  cy.stubAllApiDefaults();
+Cypress.on('uncaught:exception', (err) => {
+  console.error('App Error:', err);
+  return false;
 });
+
+// Hide fetch/XHR requests from the Cypress UI log to reduce noise
+const app = window.top;
+if (!app.document.head.querySelector('[data-hide-command-log-request]')) {
+  const style = app.document.createElement('style');
+  style.innerHTML = '.command-name-request, .command-name-xhr { display: none; }';
+  style.setAttribute('data-hide-command-log-request', '');
+  app.document.head.appendChild(style);
+}

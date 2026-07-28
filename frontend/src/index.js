@@ -15,6 +15,10 @@ import 'react-toastify/dist/ReactToastify.css';
 import { store } from "./redux/store";
 import { Provider } from "react-redux";
 
+if (window.Cypress) {
+  window.store = store;
+}
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(
   <React.StrictMode>
