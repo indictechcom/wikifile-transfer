@@ -15,8 +15,9 @@ import urllib.parse
 from model import db, User
 import logging
 from celeryWorker import app as celery_app
-from tasks import upload_image_task
+from tasks import upload_image_task, upload_task_item
 from celery.result import AsyncResult
+from utils import download_image, get_localized_wikitext, getHeader, process_upload, process_task_item
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -117,6 +118,69 @@ def upload():
             return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
     else:
         return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+
+
+@app.route('/api/upload_multi', methods=['POST'])
+def upload_multi():
+    if request.method == 'POST':
+        data = request.get_json()
+        src_url = urllib.parse.unquote(data.get('srcUrl', ''))
+        match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+
+        if not match:
+            return jsonify({"status": "FAILURE", "errors": ["Invalid source URL"]}), 400
+
+        src_project = match[0][1]
+        src_lang = match[0][0]
+        src_filename = src_url.split('/')[-1]
+        src_fileext = src_filename.split('.')[-1]
+
+        # Downloading the source file and getting saved file name
+        downloaded_filename = download_image(src_project, src_lang, src_filename)
+
+        # Getting Target Details
+        tr_project = data.get('trproject')
+        tasks = data.get('tasks', [])
+
+        # Authenticate Session
+        ses = authenticated_session()
+
+        # Check whether we have enough data or not
+        if None not in (downloaded_filename, tr_project, src_fileext, ses) and len(tasks) > 0:
+            file_path = 'temp_images/' + downloaded_filename
+            file_size = os.path.getsize(file_path)
+            num_transfers = len(tasks)
+
+            # Process synchronously if only 1 target and file is lightweight
+            if file_size < 50 * 1024 * 1024 and num_transfers == 1:
+                task_item = tasks[0]
+                lang = task_item.get("lang")
+                
+                resp = process_task_item(file_path, tr_project, task_item, src_fileext, ses)
+                if resp is None:
+                    return jsonify({"status": "FAILURE", "lang": lang, "errors": [f"Upload failed for {lang}"]}), 500
+
+                return jsonify({"status": "SUCCESS", "lang": lang, "data": {lang: resp}}), 200
+            else:
+                # Process asynchronously using Celery for multiple transfers
+                OAuthObj = {
+                    "consumer_key": CONSUMER_KEY,
+                    "consumer_secret": CONSUMER_SECRET,
+                    "key": session['mwoauth_access_token']['key'],
+                    "secret": session['mwoauth_access_token']['secret']
+                }
+                
+                pending_tasks = {}
+                for task_item in tasks:
+                    lang = task_item.get("lang")
+                    task = upload_task_item.delay(file_path, tr_project, task_item, src_fileext, OAuthObj)
+                    pending_tasks[lang] = task.id
+                    
+                return jsonify({"status": "PENDING", "tasks": pending_tasks}), 202
+        else:
+            return jsonify({"status": "FAILURE", "errors": ["Not enough data or missing tasks"]}), 400
+    else:
+        return jsonify({"status": "FAILURE", "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/preference', methods = ['GET', 'POST'])
@@ -246,7 +310,7 @@ def get_wikitext():
     }
 
     try:
-        response = requests.get(src_endpoint, params=content_params)
+        response = requests.get(src_endpoint, params=content_params, headers=getHeader())
         response.raise_for_status()
 
         page_data = response.json().get("query", {}).get("pages", [])
@@ -287,7 +351,7 @@ def editPage():
             "format": "json"
         }
 
-        response = requests.get(url=target_endpoint, params=csrf_param, auth=ses)
+        response = requests.get(url=target_endpoint, params=csrf_param, auth=ses, headers=getHeader())
         csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
         # API Parameters to edit the page
@@ -299,7 +363,7 @@ def editPage():
             "appendtext": content
         }
 
-        response = requests.post(url=target_endpoint, data=edit_params, auth=ses)
+        response = requests.post(url=target_endpoint, data=edit_params, auth=ses, headers=getHeader())
 
         if response.status_code == 200:
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
@@ -317,21 +381,36 @@ def get_base_variables():
         "username": MW_OAUTH.get_current_user(True)
     }), 200
 
+
 @app.route('/api/task_status/<task_id>', methods=['GET'])
 def get_task_status(task_id):
     """
     Endpoint to get the status and result of a Celery task.
     """
     task = AsyncResult(task_id, app=celery_app)
+    
+    status = task.status
+    result = task.result if task.successful() else None
+    error = None
+    
+    # Identify PARTIAL success requirement for the frontend
+    # Triggers if file uploaded correctly, but target article update failed.
+    if task.successful() and isinstance(result, dict):
+        if result.get("article_edit_success") is False:
+            status = "PARTIAL"
+            error = "Upload completed, but failed to edit the target article (No empty image parameter in template found, or API issue)."
+
+    if task.failed():
+        error = str(task.result)
+
     response = {
         "task_id": task_id,
-        "status": task.status,
-        "result": task.result if task.successful() else None,
+        "status": status,
+        "result": result,
     }
     
-    # If task failed, include error information
-    if task.failed():
-        response["error"] = str(task.result)
+    if error:
+        response["error"] = error
 
     return jsonify(response), 200
 
