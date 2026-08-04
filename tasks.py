@@ -1,7 +1,115 @@
 from celeryWorker import app
 import requests
 import requests_oauthlib
+import urllib.parse
 import os
+from utils import getHeader, edit_target_article
+
+@app.task(bind=True)
+def upload_task_item(self, file_path, tr_project, task_item, src_fileext, OAuthObj):
+    """
+    Celery task to handle a single language asynchronous transfer.
+    """
+    self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100})
+    
+    try:
+        # 1. Reconstruct OAuth Session
+        ses = requests_oauthlib.OAuth1(
+            client_key=OAuthObj["consumer_key"],
+            client_secret=OAuthObj["consumer_secret"],
+            resource_owner_key=OAuthObj["key"],
+            resource_owner_secret=OAuthObj["secret"]
+        )
+        
+        # 2. Parse Task Parameters
+        lang = task_item.get("lang")
+        raw_tr_filename = task_item.get("trfilename", "")
+        tr_filename = urllib.parse.unquote(raw_tr_filename).strip()
+        
+        add_template = task_item.get("addTemplate", False)
+        page_content = task_item.get("pageContent", "")
+        edit_article = task_item.get("editArticle", False)
+        article_link = task_item.get("articleLink", "")
+
+        if not lang or not tr_filename:
+            raise ValueError("Missing 'lang' or 'trfilename' in task payload.")
+
+        tr_endpoint = f"https://{lang}.{tr_project}.org/w/api.php"
+
+        # 3. Fetch CSRF Token
+        csrf_param = {
+            "action": "query",
+            "meta": "tokens",
+            "format": "json"
+        }
+        
+        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader())
+        response.raise_for_status()
+        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+        
+        self.update_state(state='PROGRESS', meta={'current': 25, 'total': 100})
+
+        # 4. Prepare Upload Parameters & Execute Upload
+        upload_param = {
+            "action": "upload",
+            "filename": f"{tr_filename}.{src_fileext}",
+            "format": "json",
+            "token": csrf_token,
+            "ignorewarnings": 1
+        }
+
+        # Add Template text as file description if checked
+        if add_template and page_content:
+            upload_param["text"] = page_content
+
+        # POST File Upload Request
+        with open(file_path, 'rb') as f:
+            files = {'file': f}
+            upload_resp = requests.post(
+                url=tr_endpoint, 
+                files=files, 
+                data=upload_param, 
+                auth=ses, 
+                headers=getHeader()
+            ).json()
+
+        # Catch API-level upload errors embedded in 200 JSON
+        if "error" in upload_resp:
+            api_err = upload_resp["error"].get("info", str(upload_resp["error"]))
+            raise Exception(f"Wikimedia API Upload Error: {api_err}")
+
+        # Extract success URLs
+        wikifile_url = upload_resp["upload"]["imageinfo"]["descriptionurl"]
+        file_link = upload_resp["upload"]["imageinfo"]["url"]
+        
+        self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
+
+        # 5. Execute Optional Target Article Edit
+        article_edit_success = None
+        if edit_article and article_link:
+            try:
+                # Most templates just expect the filename + extension (without "File:" prefix)
+                image_title = f"{tr_filename}.{src_fileext}"
+                article_edit_success = edit_target_article(
+                    article_url=article_link, 
+                    tr_endpoint=tr_endpoint, 
+                    image_title=image_title, 
+                    csrf_token=csrf_token, 
+                    ses=ses
+                )
+            except Exception as e:
+                article_edit_success = False
+
+        self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100})
+
+        return {
+            "wikipage_url": wikifile_url,
+            "file_link": file_link,
+            "article_edit_success": article_edit_success
+        }
+
+    except Exception as e:
+        raise Exception(str(e))
 
 @app.task(bind=True)
 def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj):
@@ -12,7 +120,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         resource_owner_secret=OAuthObj["secret"]
     )
     self.update_state(state='PROGRESS', meta={'current': 0, 'total': 100})
-    
+
     # API Parameter to get CSRF Token
     csrf_param = {
         "action": "query",
@@ -20,7 +128,7 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         "format": "json"
     }
 
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses)
+    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader())
     csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
     self.update_state(state='PROGRESS', meta={'current': 25, 'total': 100})
@@ -34,12 +142,9 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         "ignorewarnings": 1
     }
 
-    # Read the file for POST request
-    file = {
-        'file': open(file_path, 'rb')
-    }
+    file = {'file': open(file_path, 'rb')}
 
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses).json()
+    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses, headers=getHeader()).json()
 
     self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
 

@@ -1,6 +1,4 @@
 /**
- * Custom Cypress commands for WikiFile Transfer E2E tests.
- *
  * @see ../../../custom-commands.d.ts for TypeScript definitions.
  */
 
@@ -23,7 +21,7 @@ Cypress.Commands.add('stubTaskStatus', (taskId, fixturePath) => {
 });
 
 Cypress.Commands.add('stubUpload', (fixturePath, statusCode = 200) => {
-  cy.intercept('POST', '**/api/upload', { statusCode, fixture: fixturePath }).as('uploadFile');
+  cy.intercept('POST', '**/api/upload_multi', { statusCode, fixture: fixturePath }).as('uploadFile');
 });
 
 Cypress.Commands.add('stubWikimediaFileCheck', (exists = false) => {

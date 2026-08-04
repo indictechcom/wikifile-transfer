@@ -20,7 +20,7 @@ declare namespace Cypress {
     stubTaskStatus(taskId: string, fixturePath: string): Chainable<any>;
 
     /**
-     * Stubs the /api/upload endpoint
+     * Stubs the /api/upload_multi endpoint
      * Alias: @uploadFile
      */
     stubUpload(fixturePath: string, statusCode?: number): Chainable<any>;
@@ -37,4 +37,5 @@ declare module '*/cypress/support/utils' {
   export function visitHashRoute(route?: string): void;
   export function selectMuiDropdown(labelText: string, optionText: string): void;
   export function typeInMuiInput(labelText: string, textToType: string): void;
+  export function selectMuiMultiDropdownOptions(labelText: string, optionTexts: string[]): void;
 }

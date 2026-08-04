@@ -55,5 +55,17 @@
     "target-file-name-invalid": "Target file name contains invalid characters",
     "target-file-name-exist": "Target file name already exists at target wiki",
     "copy": "Copy",
-    "skip-selection": "Skip project and language selection during the upload step."
+    "skip-selection": "Skip project and language selection during the upload step.",
+    "enter-target-filename": "Please enter a target file name",
+    "task-failed-processing": "Task failed during processing.",
+    "validation-failed": "Validation not implemented",
+    "upload-failed": "Upload failed",
+    "upload-success": "Upload successful",
+    "processing-uploads": "Processing uploads...",
+    "partial-success": "Partial success",
+    "partial-warning-default": "Some tasks did not complete fully.",
+    "target-article-link": "Target article link",
+    "edit-article": "Edit article",
+    "uploads-completed": "Uploads completed.",
+    "max-languages": "You can select a maximum of 3 languages."
 }
