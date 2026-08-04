@@ -32,3 +32,23 @@ export const typeInMuiInput = (labelText, textToType) => {
     .clear()
     .type(textToType);
 };
+
+/**
+ * Helper to select options in an MUI multi-select dropdown (checkbox-based).
+ * Opens the dropdown, clicks each option, then closes it with Escape.
+ */
+export const selectMuiMultiDropdownOptions = (labelText, optionTexts) => {
+  cy.contains('label', labelText)
+    .parent()
+    .find('[role="combobox"]')
+    .click();
+
+  optionTexts.forEach((text) => {
+    cy.get('[role="listbox"] [role="option"]')
+      .contains(text)
+      .click();
+  });
+
+  // Close the multi-select dropdown
+  cy.get('body').type('{esc}');
+};
