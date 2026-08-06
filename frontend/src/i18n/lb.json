@@ -49,5 +49,9 @@
 	"enter-valid-project-language": "Sicht wgl. e valabel Projet an eng Sprooch eraus",
 	"target-file-name-exist": "Zilfichier gëtt et schonn an der Zilwiki",
 	"copy": "Kopéieren",
-	"skip-selection": "D'Eraussiche vu Projet a Sprooch beim Eroplueden iwwersprangen."
+	"skip-selection": "D'Eraussiche vu Projet a Sprooch beim Eroplueden iwwersprangen.",
+	"enter-target-filename": "Gitt wgl. den Numm vum Zilfichier an",
+	"target-article-link": "Link op den Zilartikel",
+	"edit-article": "Artikel änneren",
+	"max-languages": "Dir kënnt maximal 3 Sproochen auswielen."
 }

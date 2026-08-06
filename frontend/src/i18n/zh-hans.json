@@ -54,5 +54,17 @@
 	"target-file-name-invalid": "目标文件名包含无效字符",
 	"target-file-name-exist": "目标文件名在目标wiki上已存在",
 	"copy": "复制",
-	"skip-selection": "上传步骤跳过项目和语言选择。"
+	"skip-selection": "上传步骤跳过项目和语言选择。",
+	"enter-target-filename": "请输入目标文件名",
+	"task-failed-processing": "任务在处理过程期间失败。",
+	"validation-failed": "验证未实现",
+	"upload-failed": "上传失败",
+	"upload-success": "上传成功",
+	"processing-uploads": "正在处理上传…",
+	"partial-success": "部分成功",
+	"partial-warning-default": "部分任务未完全完成。",
+	"target-article-link": "目标条目链接",
+	"edit-article": "编辑条目",
+	"uploads-completed": "上传完成。",
+	"max-languages": "您最多可以选择3种语言。"
 }

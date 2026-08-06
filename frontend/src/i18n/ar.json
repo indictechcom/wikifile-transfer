@@ -54,5 +54,17 @@
 	"target-file-name-invalid": "اسم الملف المستهدف يحتوي على أحرف غير صالحة",
 	"target-file-name-exist": "اسم الملف المستهدف موجود بالفعل في ويكي الهدف",
 	"copy": "ينسخ",
-	"skip-selection": "تخطي اختيار المشروع واللغة أثناء خطوة التحميل."
+	"skip-selection": "تخطي اختيار المشروع واللغة أثناء خطوة التحميل.",
+	"enter-target-filename": "الرجاء إدخال اسم الملف الهدف",
+	"task-failed-processing": "فشلت المهمة أثناء المعالجة.",
+	"validation-failed": "لم يتم تطبيق التحقق",
+	"upload-failed": "فشل التحميل",
+	"upload-success": "تم التحميل بنجاح",
+	"processing-uploads": "جارٍ معالجة الملفات المرفوعة...",
+	"partial-success": "نجاح جزئي",
+	"partial-warning-default": "لم تكتمل بعض المهام بشكل كامل.",
+	"target-article-link": "رابط المقالة المستهدفة",
+	"edit-article": "تعديل المقال",
+	"uploads-completed": "تم تحميل الملفات بنجاح.",
+	"max-languages": "يمكنك اختيار ثلاث لغات كحد أقصى."
 }
