@@ -54,5 +54,17 @@
 	"target-file-name-invalid": "Tá carachtair neamhbhailí in ainm an chomhaid sprice",
 	"target-file-name-exist": "Tá ainm an chomhaid sprice ann cheana féin ag an vicí sprice",
 	"copy": "Cóipeáil",
-	"skip-selection": "Seachain an tionscadal agus an rogha teanga le linn chéim an uaslódála."
+	"skip-selection": "Seachain an tionscadal agus an rogha teanga le linn chéim an uaslódála.",
+	"enter-target-filename": "Cuir isteach ainm comhaid sprice le do thoil",
+	"task-failed-processing": "Theip ar an tasc le linn próiseála.",
+	"validation-failed": "Níor cuireadh bailíochtú i bhfeidhm",
+	"upload-failed": "Theip ar an uaslódáil",
+	"upload-success": "Uaslódáil rathúil",
+	"processing-uploads": "Ag próiseáil uaslódálacha...",
+	"partial-success": "Rath páirteach",
+	"partial-warning-default": "Níor críochnaíodh roinnt tascanna go hiomlán.",
+	"target-article-link": "Nasc alt spriocdhírithe",
+	"edit-article": "Cuir an t-alt in eagar",
+	"uploads-completed": "Uaslódálacha críochnaithe.",
+	"max-languages": "Is féidir leat uasmhéid de 3 theanga a roghnú."
 }

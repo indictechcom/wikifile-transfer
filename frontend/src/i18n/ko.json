@@ -55,5 +55,17 @@
 	"target-file-name-invalid": "대상 파일 이름에 유효하지 않은 문자가 포함되어 있습니다",
 	"target-file-name-exist": "대상 파일 이름이 이미 대상 위키에 존재합니다",
 	"copy": "복사",
-	"skip-selection": "업로드 단계에서 프로젝트 및 언어 선택을 건너뜁니다."
+	"skip-selection": "업로드 단계에서 프로젝트 및 언어 선택을 건너뜁니다.",
+	"enter-target-filename": "대상 파일 이름을 입력하세요",
+	"task-failed-processing": "처리 도중 작업이 실패했습니다.",
+	"validation-failed": "유효성 검사가 구현되지 않았습니다",
+	"upload-failed": "업로드 실패",
+	"upload-success": "업로드 성공",
+	"processing-uploads": "업로드 처리 중...",
+	"partial-success": "부분적 성공",
+	"partial-warning-default": "일부 작업이 완전히 완료되지 않았습니다.",
+	"target-article-link": "대상 문서 링크",
+	"edit-article": "문서 편집",
+	"uploads-completed": "업로드가 완료되었습니다.",
+	"max-languages": "최대 3개 언어를 선택할 수 있습니다."
 }

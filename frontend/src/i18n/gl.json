@@ -54,5 +54,17 @@
 	"target-file-name-invalid": "O nome do ficheiro de destino contén caracteres non válidos",
 	"target-file-name-exist": "O nome do ficheiro de destino xa existe no wiki de destino",
 	"copy": "Copiar",
-	"skip-selection": "Omitir a selección do proxecto e da lingua durante o proceso de subida."
+	"skip-selection": "Omitir a selección do proxecto e da lingua durante o proceso de subida.",
+	"enter-target-filename": "Introduce un nome para o ficheiro de destino",
+	"task-failed-processing": "A tarefa fallou durante o procesamento.",
+	"validation-failed": "A validación non está implementada",
+	"upload-failed": "Fallou a subida",
+	"upload-success": "Subida exitosa",
+	"processing-uploads": "Procesando as subidas...",
+	"partial-success": "Éxito parcial",
+	"partial-warning-default": "Algunhas tarefas non se completaron na súa totalidade.",
+	"target-article-link": "Ligazón ao artigo de destino",
+	"edit-article": "Editar o artigo",
+	"uploads-completed": "Subidas finalizadas.",
+	"max-languages": "Podes seleccionar un máximo de 3 linguas."
 }

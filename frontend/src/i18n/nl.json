@@ -55,5 +55,17 @@
 	"target-file-name-invalid": "Doelbestandsnaam bevat ongeldige tekens",
 	"target-file-name-exist": "Doelbestandsnaam bestaat al op doelwiki",
 	"copy": "Kopiëren",
-	"skip-selection": "Sla de project- en taalselectie over tijdens de uploadstap."
+	"skip-selection": "Sla de project- en taalselectie over tijdens de uploadstap.",
+	"enter-target-filename": "Voer een bestandsnaam in voor het doelbestand",
+	"task-failed-processing": "De taak is tijdens de verwerking mislukt.",
+	"validation-failed": "Validatie niet geïmplementeerd",
+	"upload-failed": "Uploaden mislukt",
+	"upload-success": "Uploaden afgerond",
+	"processing-uploads": "Uploads worden verwerkt...",
+	"partial-success": "Gedeeltelijk gelukt",
+	"partial-warning-default": "Sommige taken zijn niet volledig afgerond.",
+	"target-article-link": "Koppeling naar doelpagina",
+	"edit-article": "Pagina bewerken",
+	"uploads-completed": "Uploaden voltooid.",
+	"max-languages": "U kunt maximaal drie talen selecteren."
 }

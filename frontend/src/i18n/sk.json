@@ -1,6 +1,7 @@
 {
 	"@metadata": {
 		"authors": [
+			"KormiSK",
 			"Oujon",
 			"Wizzard"
 		]
@@ -56,5 +57,17 @@
 	"target-file-name-invalid": "Názov cieľového súboru obsahuje neplatné znaky",
 	"target-file-name-exist": "Názov cieľového súboru už na cieľovej wiki existuje",
 	"copy": "Kopírovať",
-	"skip-selection": "Preskočiť výber projektu a jazyka počas kroku nahrávania."
+	"skip-selection": "Preskočiť výber projektu a jazyka počas kroku nahrávania.",
+	"enter-target-filename": "Prosím zadajte názov cieľového súboru",
+	"task-failed-processing": "Úloha počas spracovania zlyhala.",
+	"validation-failed": "Overenie nebolo implementované",
+	"upload-failed": "Nahrávanie zlyhalo",
+	"upload-success": "Nahrávanie bolo úspešné",
+	"processing-uploads": "Spracovanie nahrávaných súborov...",
+	"partial-success": "Čiastočný úspech",
+	"partial-warning-default": "Niektoré úlohy neboli úplne dokončené.",
+	"target-article-link": "Odkaz na cieľový článok",
+	"edit-article": "Upraviť článok",
+	"uploads-completed": "Nahrávanie dokončené.",
+	"max-languages": "Môžete si vybrať maximálne 3 jazyky."
 }
