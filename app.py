@@ -4,7 +4,6 @@
 from flask import Flask, request, session, jsonify, render_template
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
-from utils import download_image, get_localized_wikitext, getHeader, process_upload
 from flask_cors import CORS
 import requests_oauthlib
 import requests
@@ -352,6 +351,7 @@ def editPage():
         }
 
         response = requests.get(url=target_endpoint, params=csrf_param, auth=ses, headers=getHeader())
+        response.raise_for_status()
         csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
         # API Parameters to edit the page
@@ -369,6 +369,58 @@ def editPage():
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
         else:
             return jsonify({ "success": False, "data": {}, "errors": ["Edit Error"]}), 500
+
+    else:
+        return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+
+
+@app.route('/api/edit_article', methods=['POST'])
+def editArticle():
+    if request.method == 'POST':
+        data = request.get_json()
+        articleName = data.get('articleName')
+        content = data.get('content')
+        target_lang = data.get('lang')
+        target_project = data.get('project')
+
+        if not articleName or not target_lang or not target_project:
+            return jsonify({ "success": False, "data": {}, "errors": ["Missing parameters"]}), 400
+
+        target_title = urllib.parse.unquote(articleName)
+
+        target_endpoint = "https://" + target_lang + "." + target_project + ".org/w/api.php"
+        ses = authenticated_session()
+
+        # API Parameter to get CSRF Token
+        csrf_param = {
+            "action": "query",
+            "meta": "tokens",
+            "format": "json"
+        }
+
+        try:
+            response = requests.get(url=target_endpoint, params=csrf_param, auth=ses, headers=getHeader())
+            response.raise_for_status()
+            csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+
+            # API Parameters to edit the page (replace wikitext entirely)
+            edit_params = {
+                "action": "edit",
+                "title": target_title,
+                "token": csrf_token,
+                "format": "json",
+                "text": content 
+            }
+
+            response = requests.post(url=target_endpoint, data=edit_params, auth=ses, headers=getHeader())
+            resp_json = response.json()
+            
+            if response.status_code == 200 and "error" not in resp_json:
+                return jsonify({ "success": True, "data": {}, "errors": []}), 200
+            else:
+                return jsonify({ "success": False, "data": {}, "errors": ["Edit Error: " + resp_json.get("error", {}).get("info", "Unknown Error")]}), 500
+        except Exception as e:
+            return jsonify({ "success": False, "data": {}, "errors": [str(e)]}), 500
 
     else:
         return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
@@ -392,13 +444,17 @@ def get_task_status(task_id):
     status = task.status
     result = task.result if task.successful() else None
     error = None
+    progress = 0
+
+    if status == 'PROGRESS':
+        progress = task.info.get('current', 0) if task.info else 0
     
     # Identify PARTIAL success requirement for the frontend
-    # Triggers if file uploaded correctly, but target article update failed.
+    # Triggers if file uploaded correctly, but wikitext fetch failed.
     if task.successful() and isinstance(result, dict):
-        if result.get("article_edit_success") is False:
+        if result.get("wikitext_fetch_success") is False:
             status = "PARTIAL"
-            error = "Upload completed, but failed to edit the target article (No empty image parameter in template found, or API issue)."
+            error = "Upload completed, but failed to fetch the target article wikitext."
 
     if task.failed():
         error = str(task.result)
@@ -407,6 +463,7 @@ def get_task_status(task_id):
         "task_id": task_id,
         "status": status,
         "result": result,
+        "progress": progress
     }
     
     if error:
@@ -441,6 +498,19 @@ def logged():
         return MW_OAUTH.get_current_user(True)
     else:
         return None
+
+
+@app.errorhandler(400)
+def bad_request(e):
+    return jsonify({"success": False, "data": {}, "errors": [e.description if hasattr(e, 'description') else "Bad Request"]}), 400
+
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"success": False, "data": {}, "errors": ["Resource not found"]}), 404
+
+@app.errorhandler(500)
+def internal_error(e):
+    return jsonify({"success": False, "data": {}, "errors": ["Internal server error"]}), 500
 
 
 if __name__ == "__main__":

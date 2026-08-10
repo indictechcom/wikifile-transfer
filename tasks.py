@@ -3,9 +3,16 @@ import requests
 import requests_oauthlib
 import urllib.parse
 import os
-from utils import getHeader, edit_target_article
+from utils import get_wikitext, getHeader
 
-@app.task(bind=True)
+@app.task(
+    bind=True,
+    autoretry_for=(requests.RequestException,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+    acks_late=True,
+)
 def upload_task_item(self, file_path, tr_project, task_item, src_fileext, OAuthObj):
     """
     Celery task to handle a single language asynchronous transfer.
@@ -84,34 +91,37 @@ def upload_task_item(self, file_path, tr_project, task_item, src_fileext, OAuthO
         
         self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
 
-        # 5. Execute Optional Target Article Edit
-        article_edit_success = None
+        # 5. Get Wikitext of the Article if edit_article is True
+        wikitext_fetch_success = None
+        wikitext = None
         if edit_article and article_link:
             try:
-                # Most templates just expect the filename + extension (without "File:" prefix)
-                image_title = f"{tr_filename}.{src_fileext}"
-                article_edit_success = edit_target_article(
-                    article_url=article_link, 
-                    tr_endpoint=tr_endpoint, 
-                    image_title=image_title, 
-                    csrf_token=csrf_token, 
-                    ses=ses
-                )
+                # Fetch the wikitext of the article
+                wikitext = get_wikitext(article_link, tr_endpoint, ses)
+                wikitext_fetch_success = True
             except Exception as e:
-                article_edit_success = False
-
+                wikitext_fetch_success = False
+        
         self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100})
 
         return {
             "wikipage_url": wikifile_url,
             "file_link": file_link,
-            "article_edit_success": article_edit_success
+            "wikitext_fetch_success": wikitext_fetch_success,
+            "wikitext": wikitext
         }
 
-    except Exception as e:
-        raise Exception(str(e))
+    except Exception:
+        raise  # Preserves original traceback
 
-@app.task(bind=True)
+@app.task(
+    bind=True,
+    autoretry_for=(requests.RequestException,),
+    retry_backoff=True,
+    retry_backoff_max=300,
+    max_retries=3,
+    acks_late=True,
+)
 def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj):
     ses = requests_oauthlib.OAuth1(
         client_key=OAuthObj["consumer_key"],
@@ -142,9 +152,9 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
         "ignorewarnings": 1
     }
 
-    file = {'file': open(file_path, 'rb')}
-
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses, headers=getHeader()).json()
+    with open(file_path, 'rb') as f:
+        files = {'file': f}
+        response = requests.post(url=tr_endpoint, files=files, data=upload_param, auth=ses, headers=getHeader()).json()
 
     self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
 

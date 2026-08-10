@@ -29,7 +29,8 @@ def download_image(src_project, src_lang, src_filename):
 
     r = requests.get(image_url, allow_redirects=True, headers=getHeader())
     filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
-    open("temp_images/" + filename, 'wb').write(r.content)
+    with open("temp_images/" + filename, 'wb') as f:
+        f.write(r.content)
 
     return filename
 
@@ -55,8 +56,9 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     }
 
     # Read the file for POST request
-    file = {'file': open(file_path, 'rb')}
-    response = requests.post(url=tr_endpoint, files=file, data=upload_param, auth=ses, headers=getHeader()).json()
+    with open(file_path, 'rb') as f:
+        files = {'file': f}
+        response = requests.post(url=tr_endpoint, files=files, data=upload_param, auth=ses, headers=getHeader()).json()
 
     # Try block to get Link and URL
     try:
@@ -102,6 +104,29 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                         return str(wikicode)
 
     return str(wikicode)
+
+def get_wikitext(article_name, tr_endpoint, ses):
+    """
+    Fetches the wikitext of an article from the target project.
+    """
+    title = urllib.parse.unquote(article_name)
+    
+    params = {
+        "action": "parse",
+        "page": title,
+        "prop": "wikitext",
+        "format": "json",
+        "formatversion": "2"
+    }
+    
+    response = requests.get(url=tr_endpoint, params=params, auth=ses, headers=getHeader())
+    response.raise_for_status()
+    data = response.json()
+    
+    if "error" in data:
+        raise Exception(data["error"].get("info", "Failed to fetch wikitext"))
+        
+    return data["parse"]["wikitext"]
 
 def process_task_item(file_path, tr_project, task_item, src_fileext, ses):
     """
@@ -159,35 +184,25 @@ def process_task_item(file_path, tr_project, task_item, src_fileext, ses):
         wikifile_url = upload_resp["upload"]["imageinfo"]["descriptionurl"]
         file_link = upload_resp["upload"]["imageinfo"]["url"]
 
-        article_edit_success = None
+        wikitext_fetch_success = None
+        wikitext = None
         if edit_article and article_link:
             try:
-                image_title = f"{tr_filename}.{src_fileext}"
-                article_edit_success = edit_target_article(
-                    article_url=article_link, 
-                    tr_endpoint=tr_endpoint, 
-                    image_title=image_title, 
-                    csrf_token=csrf_token, 
-                    ses=ses
-                )
+                # Fetch the wikitext of the article
+                wikitext = get_wikitext(article_link, tr_endpoint, ses)
+                wikitext_fetch_success = True
             except Exception as e:
-                article_edit_success = False
+                wikitext_fetch_success = False
 
         return {
             "wikipage_url": wikifile_url,
             "file_link": file_link,
-            "article_edit_success": article_edit_success
+            "wikitext_fetch_success": wikitext_fetch_success,
+            "wikitext": wikitext
         }
 
     except Exception as e:
         return None
-
-def edit_target_article(article_url, tr_endpoint, image_title, csrf_token, ses):
-    """
-    Fetches the article wikitext, locates an empty image parameter in an template and inserts the uploaded image title.
-    """
-    # Implement later
-    raise NotImplementedError
 
 
 def getHeader():
