@@ -34,6 +34,16 @@ export const typeInMuiInput = (labelText, textToType) => {
 };
 
 /**
+ * Helper to type text into an input field by its stable DOM id attribute.
+ * Preferred over label-based lookup when the component provides an explicit id.
+ */
+export const typeInInputById = (inputId, textToType) => {
+  cy.get(`#${inputId}`)
+    .clear()
+    .type(textToType);
+};
+
+/**
  * Helper to select options in an MUI multi-select dropdown (checkbox-based).
  * Opens the dropdown, clicks each option, then closes it with Escape.
  */
