@@ -55,5 +55,17 @@
 	"target-file-name-invalid": "שם קובץ היעד מכיל תווים שגויים",
 	"target-file-name-exist": "שם קובץ היעד כבר קיים בוויקי היעד",
 	"copy": "העתקה",
-	"skip-selection": "דילוג על בחירת מיזם ושפה במהלך שלב ההעלאה."
+	"skip-selection": "דילוג על בחירת מיזם ושפה במהלך שלב ההעלאה.",
+	"enter-target-filename": "נא למלא שם קובץ יעד",
+	"task-failed-processing": "המשימה נכשלה תוך כדי עיבודה.",
+	"validation-failed": "לא מומש אימות",
+	"upload-failed": "ההעלאה נכשלה",
+	"upload-success": "ההעלאה הצליחה",
+	"processing-uploads": "ההעלאות מעובדות...",
+	"partial-success": "הצלחה חלקית",
+	"partial-warning-default": "חלק מהמשימות לא הושלמו במלואן.",
+	"target-article-link": "קישור לערך יעד",
+	"edit-article": "עריכת ערך",
+	"uploads-completed": "ההעלאות הושלמו.",
+	"max-languages": "אפשר לבחור 3 שפות לכל היותר."
 }
