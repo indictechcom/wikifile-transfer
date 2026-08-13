@@ -96,7 +96,8 @@ export function uploadReducer(state, action) {
       };
     case "SET_VALIDATION_ERROR":
       return { ...state, validationError: action.payload };
-    case "UPLOAD_SYNC_SUCCESS": {
+    case "UPLOAD_SYNC_SUCCESS":
+    case "UPLOAD_COMPLETED": {
       const { results, editableWikitexts } = action.payload;
       return {
         ...state,

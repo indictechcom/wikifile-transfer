@@ -170,7 +170,6 @@ function Upload() {
         return true;
 
       case 4:
-        case 4:
         for (const lang of state.languages) {
           if (state.languageData[lang]?.editArticle) {
             if (!state.languageData[lang]?.articleLink || state.languageData[lang].articleLink.trim() === "") {
@@ -377,8 +376,21 @@ function Upload() {
         pollTaskStatus(tasks);
       }
     } catch (error) {
-      dispatch({ type: "UPLOAD_FAILURE", payload: t("upload-error") });
-      toast.error(`${t("upload-error")}: ${error}`);
+      const errorMessage = error.response?.data?.errors?.[0] || error.message || String(error);
+      const results = {};
+      
+      state.languages.forEach((lang) => {
+        if (error.response?.data?.lang && error.response.data.lang !== lang) {
+          results[lang] = { status: "FAILURE", error: t("task-failed-processing") };
+        } else {
+          results[lang] = { status: "FAILURE", error: errorMessage };
+        }
+      });
+
+      dispatch({
+        type: "UPLOAD_COMPLETED",
+        payload: { results, editableWikitexts: {} }
+      });
     }
   };
 

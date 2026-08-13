@@ -132,77 +132,74 @@ def process_task_item(file_path, tr_project, task_item, src_fileext, ses):
     """
     Synchronously processes a single transfer tasks.
     """
-    try:
-        lang = task_item.get("lang")
-        raw_tr_filename = task_item.get("trfilename", "")
-        tr_filename = urllib.parse.unquote(raw_tr_filename).strip()
-        
-        add_template = task_item.get("addTemplate", False)
-        page_content = task_item.get("pageContent", "")
-        edit_article = task_item.get("editArticle", False)
-        article_link = task_item.get("articleLink", "")
-        
-        if not lang or not tr_filename:
-            return None
+    lang = task_item.get("lang")
+    raw_tr_filename = task_item.get("trfilename", "")
+    tr_filename = urllib.parse.unquote(raw_tr_filename).strip()
+    
+    add_template = task_item.get("addTemplate", False)
+    page_content = task_item.get("pageContent", "")
+    edit_article = task_item.get("editArticle", False)
+    article_link = task_item.get("articleLink", "")
+    
+    if not lang or not tr_filename:
+        raise ValueError("Missing 'lang' or 'trfilename' in task payload.")
 
-        tr_endpoint = f"https://{lang}.{tr_project}.org/w/api.php"
+    tr_endpoint = f"https://{lang}.{tr_project}.org/w/api.php"
 
-        csrf_param = {
-            "action": "query",
-            "meta": "tokens",
-            "format": "json"
-        }
-        
-        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader())
-        response.raise_for_status()
-        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
-        
-        upload_param = {
-            "action": "upload",
-            "filename": f"{tr_filename}.{src_fileext}",
-            "format": "json",
-            "token": csrf_token,
-            "ignorewarnings": 1
-        }
+    csrf_param = {
+        "action": "query",
+        "meta": "tokens",
+        "format": "json"
+    }
+    
+    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader())
+    response.raise_for_status()
+    csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+    
+    upload_param = {
+        "action": "upload",
+        "filename": f"{tr_filename}.{src_fileext}",
+        "format": "json",
+        "token": csrf_token,
+        "ignorewarnings": 1
+    }
 
-        if add_template and page_content:
-            upload_param["text"] = page_content
+    if add_template and page_content:
+        upload_param["text"] = page_content
 
-        with open(file_path, 'rb') as f:
-            files = {'file': f}
-            upload_resp = requests.post(
-                url=tr_endpoint, 
-                files=files, 
-                data=upload_param, 
-                auth=ses, 
-                headers=getHeader()
-            ).json()
+    with open(file_path, 'rb') as f:
+        files = {'file': f}
+        upload_resp = requests.post(
+            url=tr_endpoint, 
+            files=files, 
+            data=upload_param, 
+            auth=ses, 
+            headers=getHeader()
+        ).json()
 
-        if "error" in upload_resp:
-            return None
+    if "error" in upload_resp:
+        api_err = upload_resp["error"].get("info", str(upload_resp["error"]))
+        raise Exception(f"Wikimedia API Upload Error: {api_err}")
 
-        wikifile_url = upload_resp["upload"]["imageinfo"]["descriptionurl"]
-        file_link = upload_resp["upload"]["imageinfo"]["url"]
+    wikifile_url = upload_resp["upload"]["imageinfo"]["descriptionurl"]
+    file_link = upload_resp["upload"]["imageinfo"]["url"]
 
-        wikitext_fetch_success = None
-        wikitext = None
-        if edit_article and article_link:
-            try:
-                # Fetch the wikitext of the article
-                wikitext = get_wikitext(article_link, tr_endpoint, ses)
-                wikitext_fetch_success = True
-            except Exception as e:
-                wikitext_fetch_success = False
+    wikitext_fetch_success = None
+    wikitext = None
+    if edit_article and article_link:
+        try:
+            # Fetch the wikitext of the article
+            wikitext = get_wikitext(article_link, tr_endpoint, ses)
+            wikitext_fetch_success = True
+        except Exception as e:
+            wikitext_fetch_success = False
 
-        return {
-            "wikipage_url": wikifile_url,
-            "file_link": file_link,
-            "wikitext_fetch_success": wikitext_fetch_success,
-            "wikitext": wikitext
-        }
-
-    except Exception as e:
-        return None
+    return {
+        "wikipage_url": wikifile_url,
+        "file_link": file_link,
+        "wikitext_fetch_success": wikitext_fetch_success,
+        "wikitext": wikitext
+    }
 
 
 def getHeader():

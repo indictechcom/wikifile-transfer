@@ -155,11 +155,11 @@ def upload_multi():
                 task_item = tasks[0]
                 lang = task_item.get("lang")
                 
-                resp = process_task_item(file_path, tr_project, task_item, src_fileext, ses)
-                if resp is None:
-                    return jsonify({"status": "FAILURE", "lang": lang, "errors": [f"Upload failed for {lang}"]}), 500
-
-                return jsonify({"status": "SUCCESS", "lang": lang, "data": {lang: resp}}), 200
+                try:
+                    resp = process_task_item(file_path, tr_project, task_item, src_fileext, ses)
+                    return jsonify({"status": "SUCCESS", "lang": lang, "data": {lang: resp}}), 200
+                except Exception as e:
+                    return jsonify({"status": "FAILURE", "lang": lang, "errors": [str(e)]}), 500
             else:
                 # Process asynchronously using Celery for multiple transfers
                 OAuthObj = {
