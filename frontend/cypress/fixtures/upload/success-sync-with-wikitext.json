@@ -1,0 +1,11 @@
+{
+  "success": true,
+  "data": {
+    "en": {
+      "wikipage_url": "https://en.wikipedia.org/wiki/File:TestImage.jpg",
+      "file_link": "https://upload.wikimedia.org/wikipedia/en/a/a1/TestImage.jpg",
+      "wikitext_fetch_success": true,
+      "wikitext": "== Description ==\n{{Information|description=Sample|source=Own}}\n== License ==\n{{cc-by-sa-4.0}}"
+    }
+  }
+}

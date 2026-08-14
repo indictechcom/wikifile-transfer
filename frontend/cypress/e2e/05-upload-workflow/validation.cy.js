@@ -21,7 +21,7 @@ describe('Upload Workflow: Validations & Errors', () => {
     visitHashRoute('/upload');
 
     // Step 0: enter a URL missing the required /wiki/ segment
-    cy.get('input[type="text"]').first().type('https://en.wikipedia.org/invalid/File:Test.jpg');
+    cy.get('#source-url-input').type('https://en.wikipedia.org/invalid/File:Test.jpg');
     cy.contains('button', /next/i).click();
     cy.contains('Please enter a valid source URL').should('be.visible');
   });
@@ -35,7 +35,7 @@ describe('Upload Workflow: Validations & Errors', () => {
     visitHashRoute('/upload');
 
     // Step 0: enter a valid URL and advance
-    cy.get('input[type="text"]').first().type('https://en.wikipedia.org/wiki/File:Test.jpg');
+    cy.get('#source-url-input').type('https://en.wikipedia.org/wiki/File:Test.jpg');
     cy.contains('button', /next/i).click();
 
     // Step 1: project and language are empty — attempting to proceed should fail
@@ -52,7 +52,7 @@ describe('Upload Workflow: Validations & Errors', () => {
     cy.contains('button', /back/i).should('not.exist');
 
     // Advance to Step 1
-    cy.get('input[type="text"]').first().type('https://en.wikipedia.org/wiki/File:Test.jpg');
+    cy.get('#source-url-input').type('https://en.wikipedia.org/wiki/File:Test.jpg');
     cy.contains('button', /next/i).click();
 
     // Step 1: Back button should be visible
@@ -76,7 +76,7 @@ describe('Upload Workflow: Validations & Errors', () => {
     cy.contains('button', /back/i).should('not.exist');
   });
 
-  it('handles server 500 error on upload → shows error toast', () => {
+  it('handles server 500 error on upload → shows error on result view', () => {
     cy.intercept('POST', '**/api/upload_multi', {
       statusCode: 500,
       body: { errors: ['Internal server error'] }
@@ -86,7 +86,7 @@ describe('Upload Workflow: Validations & Errors', () => {
     visitHashRoute('/upload');
 
     // Step 0: enter URL
-    cy.get('input[type="text"]').first().type('https://en.wikipedia.org/wiki/File:Bad.jpg');
+    cy.get('#source-url-input').type('https://en.wikipedia.org/wiki/File:Bad.jpg');
     cy.contains('button', /next/i).click();
 
     // Step 1: defaults pre-populated via preferences (wikipedia, en)
@@ -106,7 +106,64 @@ describe('Upload Workflow: Validations & Errors', () => {
     cy.contains('button', /upload file to target wiki/i).click();
     cy.wait('@uploadError');
 
-    // Error toast should be displayed
-    cy.contains('An error occurred during upload').should('be.visible');
+    // Error should be displayed in the results view
+    cy.contains('Internal server error').should('be.visible');
+  });
+
+  it('prevents proceeding on step 4 when editArticle is checked but article link is empty → shows toast error', () => {
+    cy.stubWikimediaFileCheck(false);
+    cy.intercept('GET', '**/api/get_wikitext**', { fixture: 'upload/wikitext-template.json' }).as('getWikiText');
+    visitHashRoute('/upload');
+
+    // Step 0: enter a valid URL
+    cy.get('#source-url-input').type('https://en.wikipedia.org/wiki/File:Test.jpg');
+    cy.contains('button', /next/i).click();
+
+    // Step 1: defaults pre-populated (wikipedia, en)
+    cy.contains('label', /select project/i).should('be.visible');
+    cy.contains('button', /next/i).click();
+
+    // Step 2: target file name auto-populated
+    cy.contains('label', /Name of the Target file/i).should('be.visible');
+    cy.contains('button', /next/i).click();
+    cy.wait('@wikimediaFileCheck');
+
+    // Step 3: template — advance past it
+    cy.get('textarea').should('be.visible');
+    cy.contains('button', /next/i).click();
+
+    // Step 4: check Edit Article checkbox but leave article link empty
+    cy.get('input[type="checkbox"]').check();
+    cy.contains('button', /upload file to target wiki/i).click();
+
+    // Validation error toast for missing article name
+    cy.contains('enter-valid-article-name').should('be.visible');
+  });
+
+  it('prevents selecting more than 3 languages on step 1 → shows max language toast', () => {
+    visitHashRoute('/upload');
+
+    // Step 0: enter a valid URL and advance
+    cy.get('#source-url-input').type('https://en.wikipedia.org/wiki/File:Test.jpg');
+    cy.contains('button', /next/i).click();
+
+    // Step 1: 'en' is already pre-selected from preferences.
+    // Open the Autocomplete and add 3 more languages to exceed the max of 3.
+    cy.get('#language-autocomplete').click();
+    cy.get('[role="listbox"] [role="option"]').contains('हिन्दी').click();
+    // Close to commit selection, then reopen
+    cy.get('body').type('{esc}');
+
+    cy.get('#language-autocomplete').click();
+    cy.get('[role="listbox"] [role="option"]').contains('বাংলা').click();
+    cy.get('body').type('{esc}');
+
+    // Now at 3 languages (en, hi, bn). Adding a 4th should trigger the max error.
+    cy.get('#language-autocomplete').click();
+    cy.get('[role="listbox"] [role="option"]').contains('தமிழ்').click();
+    cy.get('body').type('{esc}');
+
+    // Toast should display the max language error
+    cy.contains('You can select a maximum of 3 languages').should('be.visible');
   });
 });

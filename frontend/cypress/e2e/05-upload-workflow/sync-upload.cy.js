@@ -31,7 +31,7 @@ describe('Upload Workflow: Synchronous', () => {
 
     // Step 2: Verify target file name was auto-populated from the source URL
     cy.contains('label', /Name of the Target file/i).should('be.visible');
-    cy.get('input[type="text"]').should('have.value', 'Example');
+    cy.get('#target-filename-en').should('have.value', 'Example');
     cy.contains('button', /next/i).click();
     cy.wait('@wikimediaFileCheck');
 
@@ -73,10 +73,10 @@ describe('Upload Workflow: Synchronous', () => {
     cy.contains('[role="tab"]', 'ENGLISH').should('be.visible');
     cy.contains('[role="tab"]', 'हिन्दी').should('be.visible');
     // English tab is active by default — verify auto-populated file name
-    cy.get('input[type="text"]').should('have.value', 'Example');
+    cy.get('#target-filename-en').should('have.value', 'Example');
     // Switch to Hindi tab and verify the same auto-populated file name
     cy.contains('[role="tab"]', 'हिन्दी').click();
-    cy.get('input[type="text"]').should('have.value', 'Example');
+    cy.get('#target-filename-hi').should('have.value', 'Example');
     cy.contains('button', /next/i).click();
     // Wait for file existence checks — one per language
     cy.wait('@wikimediaFileCheck');
@@ -109,6 +109,6 @@ describe('Upload Workflow: Synchronous', () => {
     // Should land on step 2 (Name of Target File), not step 1
     // The target file name label is unique to step 2 content (rendered as <label>)
     cy.contains('label', /Name of the Target file/i).should('be.visible');
-    cy.get('input[type="text"]').should('have.value', 'Example');
+    cy.get('#target-filename-en').should('have.value', 'Example');
   });
 });
