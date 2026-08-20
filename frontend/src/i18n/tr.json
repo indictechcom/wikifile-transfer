@@ -54,5 +54,17 @@
 	"target-file-name-invalid": "Hedef dosya adı geçersiz karakterler içeriyor",
 	"target-file-name-exist": "Hedef dosya adı hedef wiki'de zaten mevcut",
 	"copy": "Kopyala",
-	"skip-selection": "Yükleme adımında proje ve dil seçimini atlayın."
+	"skip-selection": "Yükleme adımında proje ve dil seçimini atlayın.",
+	"enter-target-filename": "Lütfen hedef dosya adını girin",
+	"task-failed-processing": "İşlem sırasında görev başarısız oldu.",
+	"validation-failed": "Doğrulama uygulanmadı",
+	"upload-failed": "Yükleme başarısız oldu",
+	"upload-success": "Yükleme başarılı",
+	"processing-uploads": "Yüklemeler işleniyor...",
+	"partial-success": "Kısmi başarı",
+	"partial-warning-default": "Bazı görevler tam olarak tamamlanmadı.",
+	"target-article-link": "Hedef madde bağlantısı",
+	"edit-article": "Maddeyi düzenle",
+	"uploads-completed": "Yüklemeler tamamlandı.",
+	"max-languages": "En fazla 3 dil seçebilirsiniz."
 }
