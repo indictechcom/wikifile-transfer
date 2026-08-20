@@ -62,7 +62,11 @@ app = Flask(__name__)
 
 # Load configuration from YAML file
 __dir__ = os.path.dirname(__file__)
-app.config.update(yaml.safe_load(open(os.path.join(__dir__, 'config.yaml'))))
+config_path = os.path.join(__dir__, 'config.yaml')
+if not os.path.exists(config_path):
+    config_path = os.path.join(__dir__, 'config.yaml.bak')
+with open(config_path) as f:
+    app.config.update(yaml.safe_load(f))
 
 # Get variables
 ENV = app.config['ENV']
