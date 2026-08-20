@@ -1,10 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from flask import Flask, request, session, jsonify, render_template
+from flask import Flask, request, session, jsonify, render_template, has_request_context
 from flask_mwoauth import MWOAuth
 from flask_migrate import Migrate
 from flask_cors import CORS
+from logging.config import dictConfig
+import logging
+import sys
 import requests_oauthlib
 import requests
 import os
@@ -12,21 +15,58 @@ import yaml
 import re
 import urllib.parse
 from model import db, User
-import logging
 from celeryWorker import app as celery_app
 from tasks import upload_image_task, upload_task_item
 from celery.result import AsyncResult
 from utils import download_image, get_localized_wikitext, getHeader, process_upload, process_task_item
 
 # Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+class RequestFormatter(logging.Formatter):
+    def format(self, record):
+        if has_request_context():
+            record.url = request.base_url
+        else:
+            record.url = "Background Task/App Context"
+        return super().format(record)
+
+dictConfig({
+    'version': 1,
+    'disable_existing_loggers': False,
+    'formatters': {
+        'default': {
+            '()': RequestFormatter,
+            'format': '[%(asctime)s] %(url)s\n%(levelname)s in %(module)s: %(message)s',
+        }
+    },
+    'handlers': {
+        'console': {
+            'class': 'logging.StreamHandler',
+            'stream': sys.stdout,
+            'formatter': 'default'
+        },
+        'file': {
+            'class': 'logging.handlers.RotatingFileHandler',
+            'filename': 'logs/app.log',
+            'maxBytes': 10 * 1024 * 1024,
+            'backupCount': 5,
+            'formatter': 'default'
+        }
+    },
+    'root': {
+        'level': 'INFO',
+        'handlers': ['console', 'file']
+    }
+})
 
 app = Flask(__name__)
 
 # Load configuration from YAML file
 __dir__ = os.path.dirname(__file__)
-app.config.update(yaml.safe_load(open(os.path.join(__dir__, 'config.yaml'))))
+config_path = os.path.join(__dir__, 'config.yaml')
+if not os.path.exists(config_path):
+    config_path = os.path.join(__dir__, 'config.yaml.bak')
+with open(config_path) as f:
+    app.config.update(yaml.safe_load(f))
 
 # Get variables
 ENV = app.config['ENV']
@@ -54,6 +94,11 @@ MW_OAUTH = MWOAuth(
 app.register_blueprint(MW_OAUTH.bp)
 
 
+@app.before_request
+def log_request_info():
+    app.logger.info(f"Processing request: {request.method} {request.path}")
+
+
 @app.route('/index', methods=['GET'])
 @app.route("/")
 def index():
@@ -63,12 +108,18 @@ def index():
 @app.route('/api/upload', methods=['POST'])
 def upload():
     if request.method == 'POST':
+        app.logger.info("Initiating single file upload process")
         data = request.get_json()
         src_url = urllib.parse.unquote(data.get('srcUrl'))
-        match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
 
-        src_project = match[0][1]
-        src_lang = match[0][0]
+        try:
+            match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
+            src_project = match[0][1]
+            src_lang = match[0][0]
+        except IndexError:
+            app.logger.warning(f"Invalid source URL provided: {src_url}")
+            return jsonify({"success": False, "data": {}, "errors": ["Invalid source URL"]}), 400
+
         src_filename = src_url.split('/')[-1]
         src_fileext = src_filename.split('.')[-1]
 
@@ -91,19 +142,22 @@ def upload():
             file_size = os.path.getsize(file_path)
 
             if file_size < 50 * 1024 * 1024:  # 50 MB
+                app.logger.info(f"Processing file synchronously: {tr_filename} ({file_size} bytes) to {tr_lang}.{tr_project}")
                 # Process synchronously
                 resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
                 if resp is None:
+                    app.logger.error(f"Synchronous upload failed for {tr_filename} to {tr_lang}.{tr_project}")
                     return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
 
                 resp["source"] = src_url
-
+                app.logger.info(f"Upload successful for {tr_filename} to {tr_lang}.{tr_project}")
                 return jsonify({
                     "success": True,
                     "data": resp,
                     "errors": []
                 }), 200
             else:
+                app.logger.info(f"File size {file_size} exceeds 50MB, dispatching to Celery: {tr_filename} to {tr_lang}.{tr_project}")
                 # Process asynchronously using Celery
                 OAuthObj = {
                     "consumer_key": CONSUMER_KEY,
@@ -112,8 +166,10 @@ def upload():
                     "secret": session['mwoauth_access_token']['secret']
                 }
                 task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
+                app.logger.info(f"Dispatched async upload task {task.id} for {tr_filename} to {tr_lang}.{tr_project}")
                 return jsonify({"success": True, "task_id": task.id}), 202
         else:
+            app.logger.warning("Upload failed: Missing required data parameters or unauthorized session")
             return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
     else:
         return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
@@ -122,11 +178,13 @@ def upload():
 @app.route('/api/upload_multi', methods=['POST'])
 def upload_multi():
     if request.method == 'POST':
+        app.logger.info("Initiating multi-file upload process")
         data = request.get_json()
         src_url = urllib.parse.unquote(data.get('srcUrl', ''))
         match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
 
         if not match:
+            app.logger.warning(f"Invalid source URL provided: {src_url}")
             return jsonify({"status": "FAILURE", "errors": ["Invalid source URL"]}), 400
 
         src_project = match[0][1]
@@ -154,13 +212,17 @@ def upload_multi():
             if file_size < 50 * 1024 * 1024 and num_transfers == 1:
                 task_item = tasks[0]
                 lang = task_item.get("lang")
-                
+
+                app.logger.info(f"Processing single target multi-task synchronously: {lang}.{tr_project}")
                 try:
                     resp = process_task_item(file_path, tr_project, task_item, src_fileext, ses)
+                    app.logger.info(f"Multi-upload successful for {lang}.{tr_project}")
                     return jsonify({"status": "SUCCESS", "lang": lang, "data": {lang: resp}}), 200
                 except Exception as e:
+                    app.logger.error(f"Multi-upload synchronous failure for {lang}: {e}", exc_info=True)
                     return jsonify({"status": "FAILURE", "lang": lang, "errors": [str(e)]}), 500
             else:
+                app.logger.info(f"Dispatching {num_transfers} multi-upload tasks to Celery")
                 # Process asynchronously using Celery for multiple transfers
                 OAuthObj = {
                     "consumer_key": CONSUMER_KEY,
@@ -168,15 +230,17 @@ def upload_multi():
                     "key": session['mwoauth_access_token']['key'],
                     "secret": session['mwoauth_access_token']['secret']
                 }
-                
+
                 pending_tasks = {}
                 for task_item in tasks:
                     lang = task_item.get("lang")
                     task = upload_task_item.delay(file_path, tr_project, task_item, src_fileext, OAuthObj)
                     pending_tasks[lang] = task.id
-                    
+                    app.logger.info(f"Dispatched async task {task.id} for {lang}.{tr_project}")
+
                 return jsonify({"status": "PENDING", "tasks": pending_tasks}), 202
         else:
+            app.logger.warning("Upload multi failed: Missing required data parameters or missing tasks")
             return jsonify({"status": "FAILURE", "errors": ["Not enough data or missing tasks"]}), 400
     else:
         return jsonify({"status": "FAILURE", "errors": ["Invalid Request"]}), 400
@@ -196,7 +260,7 @@ def preference():
             user_project = user.pref_project
             user_lang = user.pref_language
             skip_upload_selection = user.skip_upload_selection
-            
+
         return jsonify(
             {
                 "success": True,
@@ -235,7 +299,8 @@ def preference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception as e:
+            app.logger.error(f"Database error saving preference for {cur_username}: {e}", exc_info=True)
             db.session.rollback()
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
@@ -277,7 +342,8 @@ def languagePreference():
         try:
             db.session.commit()
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
-        except:
+        except Exception as e:
+            app.logger.error(f"Database error saving language preference for {cur_username}: {e}", exc_info=True)
             db.session.rollback()
             return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
 
@@ -321,7 +387,8 @@ def get_wikitext():
             return jsonify({"wikitext": wikitext}), 200
         else:
             return jsonify({"wikitext": ""}), 200
-    except:
+    except Exception as e:
+        app.logger.error(f"Failed to fetch wikitext for {src_filename} from {src_lang}.{src_project}: {e}", exc_info=True)
         return jsonify({"wikitext": ""}), 200
 
 
@@ -339,6 +406,8 @@ def editPage():
         target_filename = targetUrl.split('/')[-1]
 
         target_endpoint = "https://" + target_lang + "." + target_project + ".org/w/api.php"
+
+        app.logger.info(f"Initiating page edit for {target_filename} on {target_lang}.{target_project}")
 
         # Authenticate Session
         ses = authenticated_session()
@@ -364,10 +433,14 @@ def editPage():
         }
 
         response = requests.post(url=target_endpoint, data=edit_params, auth=ses, headers=getHeader())
+        resp_json = response.json()
 
-        if response.status_code == 200:
+        if response.status_code == 200 and "error" not in resp_json:
+            app.logger.info(f"Successfully edited page {target_filename} on {target_lang}.{target_project}")
             return jsonify({ "success": True, "data": {}, "errors": []}), 200
         else:
+            api_err = resp_json.get("error", {}).get("info", "Unknown API Error")
+            app.logger.error(f"Edit failed for page {target_filename} on {target_lang}.{target_project}. API response: {api_err}")
             return jsonify({ "success": False, "data": {}, "errors": ["Edit Error"]}), 500
 
     else:
@@ -384,12 +457,15 @@ def editArticle():
         target_project = data.get('project')
 
         if not articleName or not target_lang or not target_project:
+            app.logger.warning("Edit article failed: Missing required parameters")
             return jsonify({ "success": False, "data": {}, "errors": ["Missing parameters"]}), 400
 
         target_title = urllib.parse.unquote(articleName)
 
         target_endpoint = "https://" + target_lang + "." + target_project + ".org/w/api.php"
         ses = authenticated_session()
+
+        app.logger.info(f"Initiating article edit for '{target_title}' on {target_lang}.{target_project}")
 
         # API Parameter to get CSRF Token
         csrf_param = {
@@ -409,17 +485,21 @@ def editArticle():
                 "title": target_title,
                 "token": csrf_token,
                 "format": "json",
-                "text": content 
+                "text": content
             }
 
             response = requests.post(url=target_endpoint, data=edit_params, auth=ses, headers=getHeader())
             resp_json = response.json()
-            
+
             if response.status_code == 200 and "error" not in resp_json:
+                app.logger.info(f"Successfully edited article '{target_title}' on {target_lang}.{target_project}")
                 return jsonify({ "success": True, "data": {}, "errors": []}), 200
             else:
-                return jsonify({ "success": False, "data": {}, "errors": ["Edit Error: " + resp_json.get("error", {}).get("info", "Unknown Error")]}), 500
+                api_err = resp_json.get("error", {}).get("info", "Unknown Error")
+                app.logger.error(f"Edit failed for article '{target_title}' on {target_lang}.{target_project}. API response: {api_err}")
+                return jsonify({ "success": False, "data": {}, "errors": ["Edit Error: " + api_err]}), 500
         except Exception as e:
+            app.logger.error(f"Edit article exception for '{target_title}' on {target_lang}.{target_project}: {e}", exc_info=True)
             return jsonify({ "success": False, "data": {}, "errors": [str(e)]}), 500
 
     else:
@@ -440,7 +520,7 @@ def get_task_status(task_id):
     Endpoint to get the status and result of a Celery task.
     """
     task = AsyncResult(task_id, app=celery_app)
-    
+
     status = task.status
     result = task.result if task.successful() else None
     error = None
@@ -448,7 +528,7 @@ def get_task_status(task_id):
 
     if status == 'PROGRESS':
         progress = task.info.get('current', 0) if task.info else 0
-    
+
     # Identify PARTIAL success requirement for the frontend
     # Triggers if file uploaded correctly, but wikitext fetch failed.
     if task.successful() and isinstance(result, dict):
@@ -465,7 +545,7 @@ def get_task_status(task_id):
         "result": result,
         "progress": progress
     }
-    
+
     if error:
         response["error"] = error
 
@@ -502,16 +582,28 @@ def logged():
 
 @app.errorhandler(400)
 def bad_request(e):
+    app.logger.warning(f"400 Bad Request: {e}")
     return jsonify({"success": False, "data": {}, "errors": [e.description if hasattr(e, 'description') else "Bad Request"]}), 400
 
 @app.errorhandler(404)
 def not_found(e):
+    app.logger.warning(f"404 Not Found: {request.base_url}")
     return jsonify({"success": False, "data": {}, "errors": ["Resource not found"]}), 404
+
+@app.errorhandler(405)
+def method_not_allowed(e):
+    app.logger.warning(f"405 Method Not Allowed: {request.base_url}")
+    return jsonify({"success": False, "data": {}, "errors": ["Method not allowed"]}), 405
 
 @app.errorhandler(500)
 def internal_error(e):
+    app.logger.error(f"500 Internal Server Error: {e}", exc_info=True)
     return jsonify({"success": False, "data": {}, "errors": ["Internal server error"]}), 500
 
+@app.errorhandler(Exception)
+def unhandled_exception(e):
+    app.logger.critical(f"Unhandled Exception: {e}", exc_info=True)
+    return jsonify({"success": False, "data": {}, "errors": ["An unexpected error occurred"]}), 500
 
 if __name__ == "__main__":
     app.run()
