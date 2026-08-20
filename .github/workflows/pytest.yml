@@ -28,4 +28,4 @@ jobs:
       - name: Test with pytest
         run: |
           pip install pytest pytest-cov pytest-mock
-          pytest tests/ --junitxml=junit/test-results.xml --cov=. --cov-report=xml --cov-report=html
+          python -m pytest tests/ --junitxml=junit/test-results.xml --cov=. --cov-report=xml --cov-report=html
