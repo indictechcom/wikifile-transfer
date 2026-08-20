@@ -13,3 +13,6 @@ redis
 gunicorn
 cryptography
 mwparserfromhell
+pytest
+pytest-cov
+pytest-mock

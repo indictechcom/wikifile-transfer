@@ -49,17 +49,64 @@ const ProjectLanguageStep = ({
           multiple
           disableCloseOnSelect
           limitTags={3}
-          options={availableLanguages}
+          
+          filterSelectedOptions={true} 
+          
+          options={Array.from(new Set((availableLanguages || []).map(lang => lang.trim().toLowerCase())))} 
+          
           value={languages}
           onChange={handleLanguageChange}
-          getOptionLabel={(option) => ISO6391.getNativeName(option) || option}
           disabled={loading || !project}
+          
+          isOptionEqualToValue={(option, value) => option === value}
+
+          getOptionLabel={(option) => {
+            const englishName = ISO6391.getName(option);
+            return englishName ? `${englishName} (${option})` : option;
+          }}
+
+          filterOptions={(options, { inputValue }) => {
+            const search = inputValue.toLowerCase().trim();
+            return options.filter((option) => {
+              const code = option.toLowerCase();
+              const nativeName = (ISO6391.getNativeName(option) || "").toLowerCase();
+              const englishName = (ISO6391.getName(option) || "").toLowerCase();
+
+              return (
+                code.includes(search) ||
+                nativeName.includes(search) ||
+                englishName.includes(search)
+              );
+            });
+          }}
+
+          renderOption={(props, option) => {
+            const { key, ...optionProps } = props; 
+            const native = ISO6391.getNativeName(option);
+            const english = ISO6391.getName(option);
+            
+            return (
+              <li key={key} {...optionProps}>
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  <span>{native || option}</span>
+                  <span style={{ fontSize: '0.8rem', color: 'gray' }}>
+                    {english ? `${english} [${option}]` : option}
+                  </span>
+                </div>
+              </li>
+            );
+          }}
+
           renderInput={(params) => (
-            <TextField
-              {...params}
-              variant="outlined"
-              label={t("select-language")}
-              placeholder={t("select-language")}
+            <TextField 
+              {...params} 
+              variant="outlined" 
+              label={t("select-language")} 
+              placeholder={t("select-language")} 
+              inputProps={{
+                ...params.inputProps,
+                autoComplete: 'new-password', 
+              }}
             />
           )}
         />
