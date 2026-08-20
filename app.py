@@ -24,7 +24,7 @@ from utils import download_image, get_localized_wikitext, getHeader, process_upl
 class RequestFormatter(logging.Formatter):
     def format(self, record):
         if has_request_context():
-            record.url = request.url
+            record.url = request.base_url
         else:
             record.url = "Background Task/App Context"
         return super().format(record)
@@ -587,12 +587,12 @@ def bad_request(e):
 
 @app.errorhandler(404)
 def not_found(e):
-    app.logger.warning(f"404 Not Found: {request.url}")
+    app.logger.warning(f"404 Not Found: {request.base_url}")
     return jsonify({"success": False, "data": {}, "errors": ["Resource not found"]}), 404
 
 @app.errorhandler(405)
 def method_not_allowed(e):
-    app.logger.warning(f"405 Method Not Allowed: {request.url}")
+    app.logger.warning(f"405 Method Not Allowed: {request.base_url}")
     return jsonify({"success": False, "data": {}, "errors": ["Method not allowed"]}), 405
 
 @app.errorhandler(500)
