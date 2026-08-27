@@ -9,6 +9,13 @@ from celery.utils.log import get_task_logger
 # Initialize Celery logger
 logger = get_task_logger(__name__)
 
+@app.task(name="tasks.debug_ping")
+def debug_ping():
+    """Lightweight task to verify the web -> broker -> worker path without a real upload."""
+    logger.info("debug_ping received by worker")
+    return "pong"
+
+
 @app.task(
     bind=True,
     autoretry_for=(requests.RequestException,),

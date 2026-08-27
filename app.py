@@ -13,10 +13,12 @@ import requests
 import os
 import yaml
 import re
+import subprocess
 import urllib.parse
+from sqlalchemy import text
 from model import db, User
 from celeryWorker import app as celery_app
-from tasks import upload_image_task, upload_task_item
+from tasks import upload_image_task, upload_task_item, debug_ping
 from celery.result import AsyncResult
 from utils import download_image, get_localized_wikitext, getHeader, process_upload, process_task_item
 
@@ -512,6 +514,57 @@ def get_base_variables():
         "logged": logged() is not None,
         "username": MW_OAUTH.get_current_user(True)
     }), 200
+
+
+@app.route('/api/health', methods=['GET'])
+def health():
+    """Health check: git version, database and celery worker status."""
+    def git_version():
+        try:
+            return subprocess.check_output(
+                ["git", "rev-parse", "--short", "HEAD"],
+                cwd=__dir__, stderr=subprocess.DEVNULL, timeout=2
+            ).decode().strip()
+        except Exception:
+            return os.environ.get("GIT_COMMIT", "unknown")
+
+    try:
+        db.session.execute(text("SELECT 1"))
+        db_ok = True
+    except Exception:
+        db_ok = False
+
+    try:
+        conn = celery_app.connection()
+        conn.ensure_connection(max_retries=1, timeout=3)
+        conn.release()
+        redis_ok = True
+    except Exception:
+        redis_ok = False
+
+    try:
+        celery_ok = bool(celery_app.control.ping(timeout=2))
+    except Exception:
+        celery_ok = False
+
+    healthy = db_ok and redis_ok and celery_ok
+    return jsonify({
+        "status": "healthy" if healthy else "unhealthy",
+        "git_version": git_version(),
+        "database": db_ok,
+        "redis": redis_ok,
+        "celery": celery_ok,
+    }), (200 if healthy else 503)
+
+
+@app.route('/api/debug/celery', methods=['GET'])
+def debug_celery():
+    """
+    Dispatch a trivial task and return its id. Poll /api/task_status/<task_id> —
+    SUCCESS + "pong" proves the web -> broker -> worker -> result path works.
+    """
+    task = debug_ping.delay()
+    return jsonify({"task_id": task.id}), 202
 
 
 @app.route('/api/task_status/<task_id>', methods=['GET'])

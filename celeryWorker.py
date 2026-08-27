@@ -23,10 +23,12 @@ if PRODUCTION:
 app = Celery(
     'tasks',
     broker=CELERY_BROKER_URL,
-    backend=CELERY_BROKER_URL
+    backend=CELERY_BROKER_URL,
+    include=['tasks'],
 )
 
-app.conf.update( 
+app.conf.update(
+    task_default_queue=CELERY_DEFAULT_QUEUE,
     result_expires=3600,
     broker_connection_retry_on_startup=True,
 )
