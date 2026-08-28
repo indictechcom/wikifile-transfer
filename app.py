@@ -520,13 +520,22 @@ def get_base_variables():
 def health():
     """Health check: git version, database and celery worker status."""
     def git_version():
+        # Prefer an explicitly provided commit (set at deploy time). This is the
+        # most reliable source on Toolforge, where the webservice container may
+        # lack git or run as a different user than the repo owner.
+        env_commit = os.environ.get("GIT_COMMIT")
+        if env_commit:
+            return env_commit
         try:
+            # `-c safe.directory=*` avoids git's "dubious ownership" failure when
+            # the process user differs from the checkout owner (common on the
+            # Toolforge NFS mount). A slightly longer timeout absorbs NFS latency.
             return subprocess.check_output(
-                ["git", "rev-parse", "--short", "HEAD"],
-                cwd=__dir__, stderr=subprocess.DEVNULL, timeout=2
+                ["git", "-c", "safe.directory=*", "rev-parse", "--short", "HEAD"],
+                cwd=__dir__, stderr=subprocess.DEVNULL, timeout=5
             ).decode().strip()
         except Exception:
-            return os.environ.get("GIT_COMMIT", "unknown")
+            return "unknown"
 
     try:
         db.session.execute(text("SELECT 1"))
