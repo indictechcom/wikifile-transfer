@@ -259,9 +259,9 @@ def preference():
         skip_upload_selection = False
 
         if user is not None:
-            user_project = user.pref_project
-            user_lang = user.pref_language
-            skip_upload_selection = user.skip_upload_selection
+            user_project = user.pref_project or "wikipedia"
+            user_lang = user.pref_language or "en"
+            skip_upload_selection = user.skip_upload_selection or False
 
         return jsonify(
             {

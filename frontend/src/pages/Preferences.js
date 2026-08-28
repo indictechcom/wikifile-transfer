@@ -47,7 +47,7 @@ function Preferences() {
   };
 
   useEffect(() => {
-    setAvailableLanguages(projects[project]);
+    setAvailableLanguages(projects[project] || []);
   }, [project]);
 
   // Fetch user preferences and set the state
@@ -58,7 +58,7 @@ function Preferences() {
       setSkipUploadSelection(response.data.data.skip_upload_selection);
 
       // Set available languages based on the project
-      setAvailableLanguages(projects[response.data.data.project]);
+      setAvailableLanguages(projects[response.data.data.project] || []);
     });
   }, []);
 
