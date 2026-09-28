@@ -54,5 +54,17 @@
 	"target-file-name-invalid": "目標檔案名稱包含無效字元",
 	"target-file-name-exist": "目標 wiki 上已有相同目標檔名",
 	"copy": "複製",
-	"skip-selection": "上傳步驟過程跳過專案與語言選擇。"
+	"skip-selection": "上傳步驟過程跳過專案與語言選擇。",
+	"enter-target-filename": "請輸入目標檔名",
+	"task-failed-processing": "任務處理過程中失敗。",
+	"validation-failed": "未實行驗證",
+	"upload-failed": "上傳失敗",
+	"upload-success": "上傳成功",
+	"processing-uploads": "正在處理上傳…",
+	"partial-success": "部分成功",
+	"partial-warning-default": "部分任務未全部完成。",
+	"target-article-link": "目標條目連結",
+	"edit-article": "編輯條目",
+	"uploads-completed": "上傳完成。",
+	"max-languages": "您最多可以選擇 3 種語言。"
 }
