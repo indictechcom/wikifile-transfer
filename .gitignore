@@ -10,3 +10,15 @@ config.yaml
 
 .agents/
 skills-lock.json
+# Local frontend build artifacts
+static/css/
+static/js/
+static/media/
+templates/index.html
+EOFcat << 'EOF' >> .gitignore
+
+# Local frontend build artifacts
+static/css/
+static/js/
+static/media/
+templates/index.html
