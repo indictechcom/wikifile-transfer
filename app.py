@@ -16,11 +16,22 @@ import re
 import subprocess
 import urllib.parse
 from sqlalchemy import text
+from werkzeug.exceptions import HTTPException
 from model import db, User
 from celeryWorker import app as celery_app
 from tasks import upload_image_task, upload_task_item, debug_ping
 from celery.result import AsyncResult
 from utils import download_image, get_localized_wikitext, getHeader, process_upload, process_task_item
+from exceptions import (
+    AppError,
+    ValidationError,
+    AuthenticationError,
+    DownloadError,
+    UploadError,
+    MediaWikiAPIError,
+    DatabaseError,
+    TaskError,
+)
 
 # Configure logging
 class RequestFormatter(logging.Formatter):
@@ -101,6 +112,33 @@ def log_request_info():
     app.logger.info(f"Processing request: {request.method} {request.path}")
 
 
+def get_json_payload():
+    """
+    Safely retrieves and validates JSON request payload.
+    Raises ValidationError(400) if the payload is missing, malformed,
+    or not a JSON object (dictionary).
+    """
+    if not request.is_json:
+        raise ValidationError("Request must be JSON with Content-Type: application/json")
+
+    raw_data = request.get_data(cache=True)
+    if not raw_data or not raw_data.strip():
+        raise ValidationError("Request body cannot be empty")
+
+    try:
+        data = request.get_json(silent=False)
+    except Exception as e:
+        raise ValidationError("Malformed JSON payload") from e
+
+    if data is None:
+        raise ValidationError("Request body cannot be empty")
+
+    if not isinstance(data, dict):
+        raise ValidationError("JSON payload must be a JSON object")
+
+    return data
+
+
 @app.route('/index', methods=['GET'])
 @app.route("/")
 def index():
@@ -111,8 +149,13 @@ def index():
 def upload():
     if request.method == 'POST':
         app.logger.info("Initiating single file upload process")
-        data = request.get_json()
-        src_url = urllib.parse.unquote(data.get('srcUrl'))
+        data = get_json_payload()
+        src_url_raw = data.get('srcUrl')
+        if not src_url_raw or not isinstance(src_url_raw, str):
+            app.logger.warning(f"Invalid source URL provided: {src_url_raw}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Invalid source URL"]}), 400
+
+        src_url = urllib.parse.unquote(src_url_raw)
 
         try:
             match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
@@ -120,74 +163,84 @@ def upload():
             src_lang = match[0][0]
         except IndexError:
             app.logger.warning(f"Invalid source URL provided: {src_url}")
-            return jsonify({"success": False, "data": {}, "errors": ["Invalid source URL"]}), 400
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Invalid source URL"]}), 400
 
         src_filename = src_url.split('/')[-1]
         src_fileext = src_filename.split('.')[-1]
 
         # Downloading the source file and getting saved file name
         downloaded_filename = download_image(src_project, src_lang, src_filename)
+        if downloaded_filename is None:
+            app.logger.warning("Upload failed: Failed to download source image")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Failed to download source image"]}), 400
+
+        # Authenticate Session
+        ses = authenticated_session()
+        if ses is None:
+            app.logger.warning("Upload failed: Unauthorized session")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Unauthorized session"]}), 400
 
         # Getting Target Details
         tr_project = data.get('trproject')
         tr_lang = data.get('trlang')
         tr_filename = data.get('trfilename')
+        if not isinstance(tr_project, str) or not isinstance(tr_lang, str) or not isinstance(tr_filename, str) or not tr_filename:
+            app.logger.warning("Upload failed: Missing or invalid target parameters")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Not enough data"]}), 400
+
         tr_filename = urllib.parse.unquote(tr_filename)
         tr_endpoint = "https://" + tr_lang + "." + tr_project + ".org/w/api.php"
 
-        # Authenticate Session
-        ses = authenticated_session()
+        file_path = 'temp_images/' + downloaded_filename
+        file_size = os.path.getsize(file_path)
 
-        # Check whether we have enough data or not
-        if None not in (downloaded_filename, tr_filename, src_fileext, ses):
-            file_path = 'temp_images/' + downloaded_filename
-            file_size = os.path.getsize(file_path)
+        if file_size < 50 * 1024 * 1024:  # 50 MB
+            app.logger.info(f"Processing file synchronously: {tr_filename} ({file_size} bytes) to {tr_lang}.{tr_project}")
+            # Process synchronously
+            resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
+            if resp is None:
+                app.logger.error(f"Synchronous upload failed for {tr_filename} to {tr_lang}.{tr_project}")
+                return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Upload failed"]}), 500
 
-            if file_size < 50 * 1024 * 1024:  # 50 MB
-                app.logger.info(f"Processing file synchronously: {tr_filename} ({file_size} bytes) to {tr_lang}.{tr_project}")
-                # Process synchronously
-                resp = process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses)
-                if resp is None:
-                    app.logger.error(f"Synchronous upload failed for {tr_filename} to {tr_lang}.{tr_project}")
-                    return jsonify({"success": False, "data": {}, "errors": ["Upload failed"]}), 500
-
-                resp["source"] = src_url
-                app.logger.info(f"Upload successful for {tr_filename} to {tr_lang}.{tr_project}")
-                return jsonify({
-                    "success": True,
-                    "data": resp,
-                    "errors": []
-                }), 200
-            else:
-                app.logger.info(f"File size {file_size} exceeds 50MB, dispatching to Celery: {tr_filename} to {tr_lang}.{tr_project}")
-                # Process asynchronously using Celery
-                OAuthObj = {
-                    "consumer_key": CONSUMER_KEY,
-                    "consumer_secret": CONSUMER_SECRET,
-                    "key": session['mwoauth_access_token']['key'],
-                    "secret": session['mwoauth_access_token']['secret']
-                }
-                task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
-                app.logger.info(f"Dispatched async upload task {task.id} for {tr_filename} to {tr_lang}.{tr_project}")
-                return jsonify({"success": True, "task_id": task.id}), 202
+            resp["source"] = src_url
+            app.logger.info(f"Upload successful for {tr_filename} to {tr_lang}.{tr_project}")
+            return jsonify({
+                "success": True,
+                "data": resp,
+                "errors": []
+            }), 200
         else:
-            app.logger.warning("Upload failed: Missing required data parameters or unauthorized session")
-            return jsonify({"success": False, "data": {}, "errors": ["Not enough data"]}), 400
+            app.logger.info(f"File size {file_size} exceeds 50MB, dispatching to Celery: {tr_filename} to {tr_lang}.{tr_project}")
+            # Process asynchronously using Celery
+            OAuthObj = {
+                "consumer_key": CONSUMER_KEY,
+                "consumer_secret": CONSUMER_SECRET,
+                "key": session['mwoauth_access_token']['key'],
+                "secret": session['mwoauth_access_token']['secret']
+            }
+            task = upload_image_task.delay(file_path, tr_filename, src_fileext, tr_endpoint, OAuthObj)
+            app.logger.info(f"Dispatched async upload task {task.id} for {tr_filename} to {tr_lang}.{tr_project}")
+            return jsonify({"success": True, "task_id": task.id}), 202
     else:
-        return jsonify({"success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/upload_multi', methods=['POST'])
 def upload_multi():
     if request.method == 'POST':
         app.logger.info("Initiating multi-file upload process")
-        data = request.get_json()
-        src_url = urllib.parse.unquote(data.get('srcUrl', ''))
+        data = get_json_payload()
+        src_url_raw = data.get('srcUrl', '')
+        if not src_url_raw or not isinstance(src_url_raw, str):
+            app.logger.warning(f"Invalid source URL provided: {src_url_raw}")
+            return jsonify({"status": "FAILURE", "success": False, "data": {}, "errors": ["Invalid source URL"]}), 400
+
+        src_url = urllib.parse.unquote(src_url_raw)
         match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", src_url)
 
         if not match:
             app.logger.warning(f"Invalid source URL provided: {src_url}")
-            return jsonify({"status": "FAILURE", "errors": ["Invalid source URL"]}), 400
+            return jsonify({"status": "FAILURE", "success": False, "data": {}, "errors": ["Invalid source URL"]}), 400
 
         src_project = match[0][1]
         src_lang = match[0][0]
@@ -196,56 +249,66 @@ def upload_multi():
 
         # Downloading the source file and getting saved file name
         downloaded_filename = download_image(src_project, src_lang, src_filename)
-
-        # Getting Target Details
-        tr_project = data.get('trproject')
-        tasks = data.get('tasks', [])
+        if downloaded_filename is None:
+            app.logger.warning("Upload multi failed: Failed to download source image")
+            return jsonify({"status": "FAILURE", "success": False, "data": {}, "errors": ["Failed to download source image"]}), 400
 
         # Authenticate Session
         ses = authenticated_session()
+        if ses is None:
+            app.logger.warning("Upload multi failed: Unauthorized session")
+            return jsonify({"status": "FAILURE", "success": False, "data": {}, "errors": ["Unauthorized session"]}), 400
 
-        # Check whether we have enough data or not
-        if None not in (downloaded_filename, tr_project, src_fileext, ses) and len(tasks) > 0:
-            file_path = 'temp_images/' + downloaded_filename
-            file_size = os.path.getsize(file_path)
-            num_transfers = len(tasks)
+        # Getting Target Details
+        tr_project = data.get('trproject')
+        tasks = data.get('tasks')
 
-            # Process synchronously if only 1 target and file is lightweight
-            if file_size < 50 * 1024 * 1024 and num_transfers == 1:
-                task_item = tasks[0]
-                lang = task_item.get("lang")
+        if not isinstance(tr_project, str) or not tr_project:
+            app.logger.warning("Upload multi failed: Missing or invalid trproject")
+            return jsonify({"status": "FAILURE", "success": False, "data": {}, "errors": ["Not enough data or missing tasks"]}), 400
 
-                app.logger.info(f"Processing single target multi-task synchronously: {lang}.{tr_project}")
-                try:
-                    resp = process_task_item(file_path, tr_project, task_item, src_fileext, ses)
-                    app.logger.info(f"Multi-upload successful for {lang}.{tr_project}")
-                    return jsonify({"status": "SUCCESS", "lang": lang, "data": {lang: resp}}), 200
-                except Exception as e:
-                    app.logger.error(f"Multi-upload synchronous failure for {lang}: {e}", exc_info=True)
-                    return jsonify({"status": "FAILURE", "lang": lang, "errors": [str(e)]}), 500
-            else:
-                app.logger.info(f"Dispatching {num_transfers} multi-upload tasks to Celery")
-                # Process asynchronously using Celery for multiple transfers
-                OAuthObj = {
-                    "consumer_key": CONSUMER_KEY,
-                    "consumer_secret": CONSUMER_SECRET,
-                    "key": session['mwoauth_access_token']['key'],
-                    "secret": session['mwoauth_access_token']['secret']
-                }
+        if not isinstance(tasks, list) or len(tasks) == 0 or not all(isinstance(item, dict) for item in tasks):
+            app.logger.warning("Upload multi failed: Missing or invalid tasks list")
+            return jsonify({"status": "FAILURE", "success": False, "data": {}, "errors": ["Not enough data or missing tasks"]}), 400
 
-                pending_tasks = {}
-                for task_item in tasks:
-                    lang = task_item.get("lang")
-                    task = upload_task_item.delay(file_path, tr_project, task_item, src_fileext, OAuthObj)
-                    pending_tasks[lang] = task.id
-                    app.logger.info(f"Dispatched async task {task.id} for {lang}.{tr_project}")
+        file_path = 'temp_images/' + downloaded_filename
+        file_size = os.path.getsize(file_path)
+        num_transfers = len(tasks)
 
-                return jsonify({"status": "PENDING", "tasks": pending_tasks}), 202
+        # Process synchronously if only 1 target and file is lightweight
+        if file_size < 50 * 1024 * 1024 and num_transfers == 1:
+            task_item = tasks[0]
+            lang = task_item.get("lang")
+
+            app.logger.info(f"Processing single target multi-task synchronously: {lang}.{tr_project}")
+            try:
+                resp = process_task_item(file_path, tr_project, task_item, src_fileext, ses)
+                app.logger.info(f"Multi-upload successful for {lang}.{tr_project}")
+                return jsonify({"status": "SUCCESS", "lang": lang, "data": {lang: resp}}), 200
+            except (MediaWikiAPIError, UploadError) as e:
+                app.logger.error(f"Multi-upload synchronous failure for {lang}: {e}")
+                return jsonify({"status": "FAILURE", "success": False, "data": {}, "lang": lang, "errors": [e.message]}), e.status_code
+            except Exception as e:
+                app.logger.error(f"Multi-upload synchronous failure for {lang}: {e}", exc_info=True)
+                return jsonify({"status": "FAILURE", "success": False, "data": {}, "lang": lang, "errors": [str(e)]}), 500
         else:
-            app.logger.warning("Upload multi failed: Missing required data parameters or missing tasks")
-            return jsonify({"status": "FAILURE", "errors": ["Not enough data or missing tasks"]}), 400
-    else:
-        return jsonify({"status": "FAILURE", "errors": ["Invalid Request"]}), 400
+            app.logger.info(f"Dispatching {num_transfers} multi-upload tasks to Celery")
+            # Process asynchronously using Celery for multiple transfers
+            OAuthObj = {
+                "consumer_key": CONSUMER_KEY,
+                "consumer_secret": CONSUMER_SECRET,
+                "key": session['mwoauth_access_token']['key'],
+                "secret": session['mwoauth_access_token']['secret']
+            }
+
+            pending_tasks = {}
+            for task_item in tasks:
+                lang = task_item.get("lang")
+                task = upload_task_item.delay(file_path, tr_project, task_item, src_fileext, OAuthObj)
+                pending_tasks[lang] = task.id
+                app.logger.info(f"Dispatched async task {task.id} for {lang}.{tr_project}")
+
+            return jsonify({"status": "PENDING", "tasks": pending_tasks}), 202
 
 
 @app.route('/api/preference', methods = ['GET', 'POST'])
@@ -271,18 +334,45 @@ def preference():
                     "lang": user_lang,
                     "skip_upload_selection": skip_upload_selection
                 },
-                "error": []
+                "error": [],
+                "errors": []
             }), 200
 
     elif request.method == 'POST':
+        # Check authentication first
+        cur_username = MW_OAUTH.get_current_user(True)
+        if not cur_username or not isinstance(cur_username, str) or not cur_username.strip():
+            app.logger.warning("Unauthorized attempt to save preferences")
+            return jsonify({
+                "success": False,
+                "status": "FAILURE",
+                "data": {},
+                "errors": ["Authentication required"]
+            }), 401
+
         # Get the data
-        data = request.get_json()
+        data = get_json_payload()
         project = data.get('project')
         lang = data.get('lang')
-        skip_upload_selection = data.get('skip_upload_selection')
+        skip_upload_selection = bool(data.get('skip_upload_selection', False))
+
+        if project is not None and not isinstance(project, str):
+            return jsonify({
+                "success": False,
+                "status": "FAILURE",
+                "data": {},
+                "errors": ["Invalid project format"]
+            }), 400
+
+        if lang is not None and not isinstance(lang, str):
+            return jsonify({
+                "success": False,
+                "status": "FAILURE",
+                "data": {},
+                "errors": ["Invalid lang format"]
+            }), 400
 
         # Add into database
-        cur_username = MW_OAUTH.get_current_user(True)
         user = User.query.filter_by(username=cur_username).first()
 
         if user is None:
@@ -304,10 +394,10 @@ def preference():
         except Exception as e:
             app.logger.error(f"Database error saving preference for {cur_username}: {e}", exc_info=True)
             db.session.rollback()
-            return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
+            return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Database Error"]}), 500
 
     else:
-        return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/user_language', methods=['GET', 'POST'])
@@ -325,14 +415,32 @@ def languagePreference():
                 "data": {
                     "user_language": user_language
                 },
-                "error": []
+                "error": [],
+                "errors": []
             }), 200
 
     elif request.method == 'POST':
-        data = request.get_json()
-        user_language = data.get('user_language')
-
+        # Check authentication first
         cur_username = MW_OAUTH.get_current_user(True)
+        if not cur_username or not isinstance(cur_username, str) or not cur_username.strip():
+            app.logger.warning("Unauthorized attempt to save user language")
+            return jsonify({
+                "success": False,
+                "status": "FAILURE",
+                "data": {},
+                "errors": ["Authentication required"]
+            }), 401
+
+        data = get_json_payload()
+        user_language = data.get('user_language')
+        if not user_language or not isinstance(user_language, str) or not user_language.strip():
+            return jsonify({
+                "success": False,
+                "status": "FAILURE",
+                "data": {},
+                "errors": ["Missing or invalid user_language"]
+            }), 400
+
         user = User.query.filter_by(username=cur_username).first()
 
         if user is None:
@@ -347,10 +455,10 @@ def languagePreference():
         except Exception as e:
             app.logger.error(f"Database error saving language preference for {cur_username}: {e}", exc_info=True)
             db.session.rollback()
-            return jsonify({ "success": False, "data": {}, "errors": ["Database Error"]}), 500
+            return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Database Error"]}), 500
 
     else:
-        return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/get_wikitext', methods=['GET'])
@@ -377,7 +485,7 @@ def get_wikitext():
     }
 
     try:
-        response = requests.get(src_endpoint, params=content_params, headers=getHeader())
+        response = requests.get(src_endpoint, params=content_params, headers=getHeader(), timeout=(5, 15))
         response.raise_for_status()
 
         page_data = response.json().get("query", {}).get("pages", [])
@@ -397,22 +505,40 @@ def get_wikitext():
 @app.route('/api/edit_page', methods=['POST'])
 def editPage():
     if request.method == 'POST':
-        data = request.get_json()
+        data = get_json_payload()
         targetUrl = data.get('targetUrl')
         content = data.get('content')
 
+        if not targetUrl or not isinstance(targetUrl, str):
+            app.logger.warning("Edit page failed: Missing or invalid targetUrl")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Missing or invalid targetUrl"]}), 400
+
+        if content is None or not isinstance(content, str):
+            app.logger.warning("Edit page failed: Missing or invalid content")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Missing or invalid content"]}), 400
+
         match = re.findall(r"(\w+)\.(\w+)\.org/wiki/", targetUrl)
+        if not match:
+            app.logger.warning(f"Edit page failed: Invalid targetUrl format: {targetUrl}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Invalid targetUrl format"]}), 400
 
         target_project = match[0][1]
         target_lang = match[0][0]
         target_filename = targetUrl.split('/')[-1]
 
-        target_endpoint = "https://" + target_lang + "." + target_project + ".org/w/api.php"
-
-        app.logger.info(f"Initiating page edit for {target_filename} on {target_lang}.{target_project}")
+        if ':' not in target_filename:
+            app.logger.warning(f"Edit page failed: Target filename missing namespace prefix: {target_filename}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Invalid target filename format"]}), 400
 
         # Authenticate Session
         ses = authenticated_session()
+        if ses is None:
+            app.logger.warning("Edit page failed: Unauthorized session")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Authentication required"]}), 401
+
+        target_endpoint = "https://" + target_lang + "." + target_project + ".org/w/api.php"
+
+        app.logger.info(f"Initiating page edit for {target_filename} on {target_lang}.{target_project}")
 
         # API Parameter to get CSRF Token
         csrf_param = {
@@ -421,21 +547,43 @@ def editPage():
             "format": "json"
         }
 
-        response = requests.get(url=target_endpoint, params=csrf_param, auth=ses, headers=getHeader())
-        response.raise_for_status()
-        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+        try:
+            response = requests.get(url=target_endpoint, params=csrf_param, auth=ses, headers=getHeader(), timeout=(10, 20))
+            response.raise_for_status()
+            csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+        except requests.exceptions.Timeout as e:
+            app.logger.error(f"Timeout fetching CSRF token from {target_endpoint}: {e}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Timeout connecting to remote wiki"]}), 502
+        except requests.exceptions.RequestException as e:
+            app.logger.error(f"Network error fetching CSRF token from {target_endpoint}: {e}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Network error connecting to remote wiki"]}), 502
+        except (KeyError, TypeError) as e:
+            app.logger.error(f"Failed to parse CSRF token from {target_endpoint}: {e}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Failed to retrieve CSRF token"]}), 502
 
         # API Parameters to edit the page
+        title_suffix = target_filename.split(':', 1)[1]
         edit_params = {
             "action": "edit",
-            "title": "File:" + target_filename.split(':')[1],
+            "title": "File:" + title_suffix,
             "token": csrf_token,
             "format": "json",
             "appendtext": content
         }
 
-        response = requests.post(url=target_endpoint, data=edit_params, auth=ses, headers=getHeader())
-        resp_json = response.json()
+        try:
+            response = requests.post(url=target_endpoint, data=edit_params, auth=ses, headers=getHeader(), timeout=(10, 30))
+            response.raise_for_status()
+            resp_json = response.json()
+        except requests.exceptions.Timeout as e:
+            app.logger.error(f"Timeout editing page {target_filename} on {target_endpoint}: {e}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Timeout connecting to remote wiki"]}), 502
+        except requests.exceptions.RequestException as e:
+            app.logger.error(f"Network error editing page {target_filename} on {target_endpoint}: {e}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Network error connecting to remote wiki"]}), 502
+        except Exception as e:
+            app.logger.error(f"Error parsing edit response for {target_filename}: {e}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Edit Error"]}), 500
 
         if response.status_code == 200 and "error" not in resp_json:
             app.logger.info(f"Successfully edited page {target_filename} on {target_lang}.{target_project}")
@@ -443,29 +591,42 @@ def editPage():
         else:
             api_err = resp_json.get("error", {}).get("info", "Unknown API Error")
             app.logger.error(f"Edit failed for page {target_filename} on {target_lang}.{target_project}. API response: {api_err}")
-            return jsonify({ "success": False, "data": {}, "errors": ["Edit Error"]}), 500
+            return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Edit Error: " + api_err]}), 502
 
     else:
-        return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/edit_article', methods=['POST'])
 def editArticle():
     if request.method == 'POST':
-        data = request.get_json()
+        data = get_json_payload()
         articleName = data.get('articleName')
         content = data.get('content')
         target_lang = data.get('lang')
         target_project = data.get('project')
 
-        if not articleName or not target_lang or not target_project:
+        if (
+            not articleName
+            or not isinstance(articleName, str)
+            or not target_lang
+            or not isinstance(target_lang, str)
+            or not target_project
+            or not isinstance(target_project, str)
+            or (content is not None and not isinstance(content, str))
+        ):
             app.logger.warning("Edit article failed: Missing required parameters")
-            return jsonify({ "success": False, "data": {}, "errors": ["Missing parameters"]}), 400
+            return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Missing parameters"]}), 400
+
+        # Authenticate Session
+        ses = authenticated_session()
+        if ses is None:
+            app.logger.warning("Edit article failed: Unauthorized session")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Authentication required"]}), 401
 
         target_title = urllib.parse.unquote(articleName)
 
         target_endpoint = "https://" + target_lang + "." + target_project + ".org/w/api.php"
-        ses = authenticated_session()
 
         app.logger.info(f"Initiating article edit for '{target_title}' on {target_lang}.{target_project}")
 
@@ -477,35 +638,52 @@ def editArticle():
         }
 
         try:
-            response = requests.get(url=target_endpoint, params=csrf_param, auth=ses, headers=getHeader())
+            response = requests.get(url=target_endpoint, params=csrf_param, auth=ses, headers=getHeader(), timeout=(10, 20))
             response.raise_for_status()
             csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+        except requests.exceptions.Timeout as e:
+            app.logger.error(f"Timeout fetching CSRF token from {target_endpoint}: {e}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Timeout connecting to remote wiki"]}), 502
+        except requests.exceptions.RequestException as e:
+            app.logger.error(f"Network error fetching CSRF token from {target_endpoint}: {e}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Network error connecting to remote wiki"]}), 502
+        except (KeyError, TypeError) as e:
+            app.logger.error(f"Failed to parse CSRF token from {target_endpoint}: {e}")
+            return jsonify({"success": False, "status": "FAILURE", "data": {}, "errors": ["Failed to retrieve CSRF token"]}), 502
 
-            # API Parameters to edit the page (replace wikitext entirely)
-            edit_params = {
-                "action": "edit",
-                "title": target_title,
-                "token": csrf_token,
-                "format": "json",
-                "text": content
-            }
+        # API Parameters to edit the page (replace wikitext entirely)
+        edit_params = {
+            "action": "edit",
+            "title": target_title,
+            "token": csrf_token,
+            "format": "json",
+            "text": content or ""
+        }
 
-            response = requests.post(url=target_endpoint, data=edit_params, auth=ses, headers=getHeader())
+        try:
+            response = requests.post(url=target_endpoint, data=edit_params, auth=ses, headers=getHeader(), timeout=(10, 30))
+            response.raise_for_status()
             resp_json = response.json()
-
-            if response.status_code == 200 and "error" not in resp_json:
-                app.logger.info(f"Successfully edited article '{target_title}' on {target_lang}.{target_project}")
-                return jsonify({ "success": True, "data": {}, "errors": []}), 200
-            else:
-                api_err = resp_json.get("error", {}).get("info", "Unknown Error")
-                app.logger.error(f"Edit failed for article '{target_title}' on {target_lang}.{target_project}. API response: {api_err}")
-                return jsonify({ "success": False, "data": {}, "errors": ["Edit Error: " + api_err]}), 500
+        except requests.exceptions.Timeout as e:
+            app.logger.error(f"Timeout editing article '{target_title}' on {target_lang}.{target_project}: {e}")
+            return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Timeout connecting to remote wiki"]}), 502
+        except requests.exceptions.RequestException as e:
+            app.logger.error(f"Network error editing article '{target_title}' on {target_lang}.{target_project}: {e}")
+            return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Network error connecting to remote wiki"]}), 502
         except Exception as e:
             app.logger.error(f"Edit article exception for '{target_title}' on {target_lang}.{target_project}: {e}", exc_info=True)
-            return jsonify({ "success": False, "data": {}, "errors": [str(e)]}), 500
+            return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": [str(e)]}), 500
+
+        if response.status_code == 200 and "error" not in resp_json:
+            app.logger.info(f"Successfully edited article '{target_title}' on {target_lang}.{target_project}")
+            return jsonify({ "success": True, "data": {}, "errors": []}), 200
+        else:
+            api_err = resp_json.get("error", {}).get("info", "Unknown Error")
+            app.logger.error(f"Edit failed for article '{target_title}' on {target_lang}.{target_project}. API response: {api_err}")
+            return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Edit Error: " + api_err]}), 502
 
     else:
-        return jsonify({ "success": False, "data": {}, "errors": ["Invalid Request"]}), 400
+        return jsonify({ "success": False, "status": "FAILURE", "data": {}, "errors": ["Invalid Request"]}), 400
 
 
 @app.route('/api/user', methods=['GET'])
@@ -599,7 +777,16 @@ def get_task_status(task_id):
             error = "Upload completed, but failed to fetch the target article wikitext."
 
     if task.failed():
-        error = str(task.result)
+        if isinstance(task.result, AppError):
+            error = task.result.message
+        elif isinstance(task.result, requests.exceptions.Timeout):
+            error = "Request timed out connecting to remote wiki"
+        elif isinstance(task.result, requests.exceptions.RequestException):
+            error = "Network error connecting to remote wiki"
+        elif isinstance(task.result, Exception):
+            error = str(task.result) if str(task.result) else "Task execution failed"
+        else:
+            error = str(task.result) if task.result else "Task execution failed"
 
     response = {
         "task_id": task_id,
@@ -645,27 +832,81 @@ def logged():
 @app.errorhandler(400)
 def bad_request(e):
     app.logger.warning(f"400 Bad Request: {e}")
-    return jsonify({"success": False, "data": {}, "errors": [e.description if hasattr(e, 'description') else "Bad Request"]}), 400
+    return jsonify({
+        "success": False,
+        "status": "FAILURE",
+        "data": {},
+        "errors": [e.description if hasattr(e, 'description') else "Bad Request"]
+    }), 400
 
 @app.errorhandler(404)
 def not_found(e):
     app.logger.warning(f"404 Not Found: {request.base_url}")
-    return jsonify({"success": False, "data": {}, "errors": ["Resource not found"]}), 404
+    return jsonify({
+        "success": False,
+        "status": "FAILURE",
+        "data": {},
+        "errors": ["Resource not found"]
+    }), 404
 
 @app.errorhandler(405)
 def method_not_allowed(e):
     app.logger.warning(f"405 Method Not Allowed: {request.base_url}")
-    return jsonify({"success": False, "data": {}, "errors": ["Method not allowed"]}), 405
+    return jsonify({
+        "success": False,
+        "status": "FAILURE",
+        "data": {},
+        "errors": ["Method not allowed"]
+    }), 405
 
 @app.errorhandler(500)
 def internal_error(e):
     app.logger.error(f"500 Internal Server Error: {e}", exc_info=True)
-    return jsonify({"success": False, "data": {}, "errors": ["Internal server error"]}), 500
+    return jsonify({
+        "success": False,
+        "status": "FAILURE",
+        "data": {},
+        "errors": ["Internal server error"]
+    }), 500
+
+@app.errorhandler(AppError)
+def handle_app_error(e):
+    if e.status_code >= 500:
+        app.logger.error(f"{e.error_type} ({e.status_code}): {e.message}", exc_info=True)
+    else:
+        app.logger.warning(f"{e.error_type} ({e.status_code}): {e.message}")
+    return jsonify({
+        "success": False,
+        "status": "FAILURE",
+        "data": {},
+        "errors": [e.message]
+    }), e.status_code
+
+
+@app.errorhandler(HTTPException)
+def handle_http_exception(e):
+    code = e.code or 500
+    if code >= 500:
+        app.logger.error(f"HTTPException {code}: {e.description}", exc_info=True)
+    else:
+        app.logger.warning(f"HTTPException {code}: {e.description}")
+    return jsonify({
+        "success": False,
+        "status": "FAILURE",
+        "data": {},
+        "errors": [e.description]
+    }), code
+
 
 @app.errorhandler(Exception)
 def unhandled_exception(e):
     app.logger.critical(f"Unhandled Exception: {e}", exc_info=True)
-    return jsonify({"success": False, "data": {}, "errors": ["An unexpected error occurred"]}), 500
+    return jsonify({
+        "success": False,
+        "status": "FAILURE",
+        "data": {},
+        "errors": ["An unexpected error occurred"]
+    }), 500
 
 if __name__ == "__main__":
     app.run()

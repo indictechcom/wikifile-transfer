@@ -2,7 +2,9 @@
 Unit tests for utility functions.
 """
 import pytest
+import requests
 from unittest.mock import patch, MagicMock, mock_open
+from exceptions import UploadError, MediaWikiAPIError
 from utils import (
     getHeader,
     download_image,
@@ -97,6 +99,39 @@ class TestDownloadImage:
 
         assert result is None
 
+    def test_timeout_fetching_details_returns_none(self):
+        """
+        GIVEN a timeout when querying image info
+        WHEN download_image is called
+        THEN check that None is returned safely
+        """
+        with patch('utils.requests.get', side_effect=requests.exceptions.Timeout("Connect timed out")):
+            result = download_image('wikipedia', 'en', 'File:Test.png')
+
+        assert result is None
+
+    def test_timeout_downloading_file_content_returns_none(self):
+        """
+        GIVEN a timeout when downloading binary image data
+        WHEN download_image is called
+        THEN check that None is returned safely
+        """
+        mock_api_response = MagicMock()
+        mock_api_response.json.return_value = {
+            'query': {
+                'pages': {
+                    '123': {
+                        'imageinfo': [{'url': 'https://example.com/image.png'}]
+                    }
+                }
+            }
+        }
+
+        with patch('utils.requests.get', side_effect=[mock_api_response, requests.exceptions.Timeout("Read timed out")]):
+            result = download_image('wikipedia', 'en', 'File:Test.png')
+
+        assert result is None
+
 
 class TestProcessUpload:
     def test_success(self):
@@ -175,6 +210,65 @@ class TestProcessUpload:
             )
 
         assert result is None
+
+    def test_csrf_timeout_returns_none(self):
+        """
+        GIVEN a timeout when fetching CSRF token
+        WHEN process_upload is called
+        THEN check that None is returned safely
+        """
+        with patch('utils.requests.get', side_effect=requests.exceptions.Timeout("CSRF timed out")):
+            result = process_upload(
+                'temp_images/test.png', 'TestFile', 'png',
+                'https://en.wikipedia.org/w/api.php', MagicMock()
+            )
+
+        assert result is None
+
+    def test_post_upload_timeout_returns_none(self):
+        """
+        GIVEN a timeout when uploading image file
+        WHEN process_upload is called
+        THEN check that None is returned safely
+        """
+        mock_csrf = MagicMock()
+        mock_csrf.json.return_value = {
+            'query': {'tokens': {'csrftoken': 'mock_csrf_token'}}
+        }
+
+        with patch('utils.requests.get', return_value=mock_csrf), \
+             patch('utils.requests.post', side_effect=requests.exceptions.Timeout("POST timed out")), \
+             patch('builtins.open', mock_open(read_data=b'fake file content')):
+            result = process_upload(
+                'temp_images/test.png', 'TestFile', 'png',
+                'https://en.wikipedia.org/w/api.php', MagicMock()
+            )
+
+        assert result is None
+
+    def test_api_error_raises_mediawiki_api_error(self):
+        """
+        GIVEN an error response from Wikimedia API
+        WHEN process_upload is called
+        THEN check that MediaWikiAPIError is raised
+        """
+        mock_csrf = MagicMock()
+        mock_csrf.json.return_value = {
+            'query': {'tokens': {'csrftoken': 'mock_csrf_token'}}
+        }
+        mock_upload = MagicMock()
+        mock_upload.json.return_value = {
+            'error': {'info': 'File exists on wiki', 'code': 'fileexists'}
+        }
+
+        with patch('utils.requests.get', return_value=mock_csrf), \
+             patch('utils.requests.post', return_value=mock_upload), \
+             patch('builtins.open', mock_open(read_data=b'fake file content')):
+            with pytest.raises(MediaWikiAPIError, match="File exists on wiki"):
+                process_upload(
+                    'temp_images/test.png', 'TestFile', 'png',
+                    'https://en.wikipedia.org/w/api.php', MagicMock()
+                )
 
 
 class TestGetLocalizedWikitext:
@@ -261,6 +355,64 @@ class TestGetLocalizedWikitext:
 
         assert 'Test' in result
 
+    def test_multiple_templates_first_missing_langlinks_subsequent_localized(self):
+        """
+        GIVEN wikitext with multiple templates where the first has no langlinks
+        WHEN get_localized_wikitext is called
+        THEN check that the first template is preserved and the subsequent template is localized
+        """
+        wikitext = '{{Non-free use rationale|Article=English 1}}\n{{Non-free media data|Article=English 2}}'
+
+        mock_resp1 = MagicMock()
+        mock_resp1.raise_for_status.return_value = None
+        mock_resp1.json.return_value = {
+            'query': {'pages': [{'title': 'English 1'}]}  # No langlinks key
+        }
+
+        mock_resp2 = MagicMock()
+        mock_resp2.raise_for_status.return_value = None
+        mock_resp2.json.return_value = {
+            'query': {
+                'pages': [{
+                    'langlinks': [{'lang': 'fr', 'title': 'Titre 2'}]
+                }]
+            }
+        }
+
+        with patch('utils.requests.get', side_effect=[mock_resp1, mock_resp2]):
+            result = get_localized_wikitext(
+                wikitext, 'https://en.wikipedia.org/w/api.php', 'fr'
+            )
+
+        assert 'English 1' in result
+        assert 'Titre 2' in result
+
+    def test_multiple_templates_first_raises_exception_subsequent_localized(self):
+        """
+        GIVEN wikitext with multiple templates where the first request times out
+        WHEN get_localized_wikitext is called
+        THEN check that the first template is preserved and the subsequent template is localized
+        """
+        wikitext = '{{Non-free use rationale|Article=English 1}}\n{{Non-free media data|Article=English 2}}'
+
+        mock_resp2 = MagicMock()
+        mock_resp2.raise_for_status.return_value = None
+        mock_resp2.json.return_value = {
+            'query': {
+                'pages': [{
+                    'langlinks': [{'lang': 'fr', 'title': 'Titre 2'}]
+                }]
+            }
+        }
+
+        with patch('utils.requests.get', side_effect=[requests.exceptions.Timeout("Timeout"), mock_resp2]):
+            result = get_localized_wikitext(
+                wikitext, 'https://en.wikipedia.org/w/api.php', 'fr'
+            )
+
+        assert 'English 1' in result
+        assert 'Titre 2' in result
+
 
 class TestGetWikitext:
     def test_success(self):
@@ -300,6 +452,20 @@ class TestGetWikitext:
             with pytest.raises(Exception, match="Page not found"):
                 get_wikitext(
                     'Nonexistent_Article',
+                    'https://en.wikipedia.org/w/api.php',
+                    MagicMock()
+                )
+
+    def test_timeout_raises_mediawiki_api_error(self):
+        """
+        GIVEN a timeout when fetching article wikitext
+        WHEN get_wikitext is called
+        THEN check that MediaWikiAPIError is raised
+        """
+        with patch('utils.requests.get', side_effect=requests.exceptions.Timeout("Timeout")):
+            with pytest.raises(MediaWikiAPIError, match="Timeout fetching wikitext"):
+                get_wikitext(
+                    'Test_Article',
                     'https://en.wikipedia.org/w/api.php',
                     MagicMock()
                 )
@@ -391,6 +557,28 @@ class TestProcessTaskItem:
              patch('utils.requests.post', return_value=mock_upload), \
              patch('builtins.open', mock_open(read_data=b'fake file content')):
             with pytest.raises(Exception, match="Wikimedia API Upload Error"):
+                process_task_item(
+                    'temp_images/test.png', 'wikipedia', task_item, 'png', MagicMock()
+                )
+
+    def test_post_timeout_raises_upload_error(self):
+        """
+        GIVEN a timeout when uploading image in process_task_item
+        WHEN process_task_item is called
+        THEN check that UploadError is raised
+        """
+        mock_csrf = MagicMock()
+        mock_csrf.raise_for_status.return_value = None
+        mock_csrf.json.return_value = {
+            'query': {'tokens': {'csrftoken': 'mock_token'}}
+        }
+
+        task_item = {'lang': 'fr', 'trfilename': 'TestFile'}
+
+        with patch('utils.requests.get', return_value=mock_csrf), \
+             patch('utils.requests.post', side_effect=requests.exceptions.Timeout("Upload timeout")), \
+             patch('builtins.open', mock_open(read_data=b'fake file content')):
+            with pytest.raises(UploadError, match="Timeout uploading file"):
                 process_task_item(
                     'temp_images/test.png', 'wikipedia', task_item, 'png', MagicMock()
                 )

@@ -2,6 +2,7 @@
 Functional tests for the Flask API routes.
 """
 from unittest.mock import patch, MagicMock
+import requests
 
 
 def test_index_page_get(client):
@@ -734,3 +735,992 @@ def test_404_handler(client):
     data = response.get_json()
     assert data['success'] is False
     assert 'Resource not found' in data['errors'][0]
+
+
+def test_task_status_app_error_failure(client):
+    """
+    GIVEN a task that failed with an AppError
+    WHEN '/api/task_status/<task_id>' is polled
+    THEN check that status is FAILURE and error message matches the AppError message
+    """
+    from exceptions import UploadError
+
+    mock_task = MagicMock()
+    mock_task.status = 'FAILURE'
+    mock_task.successful.return_value = False
+    mock_task.failed.return_value = True
+    mock_task.result = UploadError('Upload response missing image info data')
+
+    with patch('app.AsyncResult', return_value=mock_task):
+        response = client.get('/api/task_status/test-upload-error-task')
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['status'] == 'FAILURE'
+    assert data['error'] == 'Upload response missing image info data'
+
+
+def test_app_error_handler_validation(client):
+    """
+    GIVEN a route raising a ValidationError
+    WHEN requested
+    THEN check that 400 is returned with consistent JSON error schema
+    """
+    from exceptions import ValidationError
+
+    with patch('app.download_image', side_effect=ValidationError('Test validation failure')):
+        response = client.post('/api/upload', json={
+            'srcUrl': 'https://en.wikipedia.org/wiki/File:Test.png',
+            'trproject': 'wikipedia',
+            'trlang': 'fr',
+            'trfilename': 'TestFile'
+        })
+
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['data'] == {}
+    assert data['errors'] == ['Test validation failure']
+
+
+def test_app_error_handler_upload(client):
+    """
+    GIVEN a route raising an UploadError
+    WHEN requested
+    THEN check that 502 is returned with consistent JSON error schema
+    """
+    from exceptions import UploadError
+
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.download_image', return_value='mock_file.png'), \
+         patch('os.path.getsize', return_value=1024), \
+         patch('app.process_upload', side_effect=UploadError('Remote wiki upload rejected')):
+
+        response = client.post('/api/upload', json={
+            'srcUrl': 'https://en.wikipedia.org/wiki/File:Test.png',
+            'trproject': 'wikipedia',
+            'trlang': 'fr',
+            'trfilename': 'TestFile'
+        })
+
+    assert response.status_code == 502
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['errors'] == ['Remote wiki upload rejected']
+
+
+def test_http_exception_preserves_status_and_description(client):
+    """
+    GIVEN a route raising a Werkzeug HTTPException (e.g. 401 Unauthorized)
+    WHEN requested
+    THEN check that the original status code and description are preserved in JSON
+    """
+    from werkzeug.exceptions import Unauthorized
+
+    with patch('app.download_image', side_effect=Unauthorized('Custom unauthorized description')):
+        response = client.post('/api/upload', json={
+            'srcUrl': 'https://en.wikipedia.org/wiki/File:Test.png',
+            'trproject': 'wikipedia',
+            'trlang': 'fr',
+            'trfilename': 'TestFile'
+        })
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['errors'] == ['Custom unauthorized description']
+
+
+def test_unhandled_exception_returns_500_without_leak(client):
+    """
+    GIVEN a route encountering an unexpected generic Exception
+    WHEN requested
+    THEN check that 500 is returned with a generic safe error without leaking internal details
+    """
+    with patch('app.download_image', side_effect=ZeroDivisionError('secret_internal_detail_divided_by_zero')):
+        response = client.post('/api/upload', json={
+            'srcUrl': 'https://en.wikipedia.org/wiki/File:Test.png',
+            'trproject': 'wikipedia',
+            'trlang': 'fr',
+            'trfilename': 'TestFile'
+        })
+
+    assert response.status_code == 500
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['errors'] == ['An unexpected error occurred']
+    assert 'secret_internal_detail_divided_by_zero' not in str(data)
+
+
+# ============================================================================
+# Increment 3: Request Payload Validation Tests
+# ============================================================================
+
+def test_payload_validation_missing_content_type(client):
+    """
+    GIVEN a POST request with no Content-Type header or text/plain
+    WHEN requested on a JSON endpoint
+    THEN check that 400 is returned with consistent JSON error schema
+    """
+    response = client.post('/api/upload', data='{}', content_type='text/plain')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert 'Content-Type: application/json' in data['errors'][0]
+
+
+def test_payload_validation_empty_body(client):
+    """
+    GIVEN a POST request with Content-Type application/json but an empty body
+    WHEN requested on a JSON endpoint
+    THEN check that 400 is returned with consistent JSON error schema
+    """
+    response = client.post('/api/upload', data='', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert 'empty' in data['errors'][0].lower()
+
+
+def test_payload_validation_malformed_json(client):
+    """
+    GIVEN a POST request with malformed JSON syntax
+    WHEN requested on a JSON endpoint
+    THEN check that 400 is returned with consistent JSON error schema
+    """
+    response = client.post('/api/upload', data='{"invalid": json', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert 'Malformed JSON payload' in data['errors'][0]
+
+
+def test_payload_validation_wrong_top_level_list(client):
+    """
+    GIVEN a POST request with a JSON array instead of a JSON object
+    WHEN requested on a JSON endpoint
+    THEN check that 400 is returned with consistent JSON error schema
+    """
+    response = client.post('/api/upload', data='[1, 2, 3]', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert 'JSON object' in data['errors'][0]
+
+
+def test_payload_validation_wrong_top_level_primitive(client):
+    """
+    GIVEN a POST request with a JSON primitive string instead of an object
+    WHEN requested on a JSON endpoint
+    THEN check that 400 is returned with consistent JSON error schema
+    """
+    response = client.post('/api/upload', data='"just a string"', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert 'JSON object' in data['errors'][0]
+
+
+def test_upload_missing_or_invalid_target_fields(client):
+    """
+    GIVEN an upload request with non-string or missing target parameters
+    WHEN '/api/upload' is requested
+    THEN check that 400 is returned safely without unhandled exceptions
+    """
+    response = client.post('/api/upload', json={
+        'srcUrl': 'https://en.wikipedia.org/wiki/File:Test.png',
+        'trproject': 'wikipedia',
+        'trlang': 'fr',
+        'trfilename': None
+    })
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_upload_multi_empty_body(client):
+    """
+    GIVEN an empty request body
+    WHEN '/api/upload_multi' is POSTed
+    THEN check that 400 is returned with status FAILURE
+    """
+    response = client.post('/api/upload_multi', data='', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['status'] == 'FAILURE'
+    assert data['success'] is False
+
+
+def test_upload_multi_malformed_json(client):
+    """
+    GIVEN malformed JSON
+    WHEN '/api/upload_multi' is POSTed
+    THEN check that 400 is returned with status FAILURE
+    """
+    response = client.post('/api/upload_multi', data='{malformed', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['status'] == 'FAILURE'
+    assert data['success'] is False
+
+
+def test_upload_multi_wrong_top_level_type(client):
+    """
+    GIVEN a JSON list instead of an object
+    WHEN '/api/upload_multi' is POSTed
+    THEN check that 400 is returned with status FAILURE
+    """
+    response = client.post('/api/upload_multi', data='[1, 2]', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['status'] == 'FAILURE'
+    assert data['success'] is False
+
+
+def test_upload_multi_invalid_tasks_type(client):
+    """
+    GIVEN tasks field that is not a list of dictionaries
+    WHEN '/api/upload_multi' is POSTed
+    THEN check that 400 is returned with status FAILURE
+    """
+    response = client.post('/api/upload_multi', json={
+        'srcUrl': 'https://en.wikipedia.org/wiki/File:Test.png',
+        'trproject': 'wikipedia',
+        'tasks': 'not-a-list'
+    })
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['status'] == 'FAILURE'
+    assert data['success'] is False
+
+
+def test_preference_authenticated_empty_body(client):
+    """
+    GIVEN an authenticated user sending an empty body
+    WHEN '/api/preference' is POSTed
+    THEN check that 400 is returned
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = 'TestUser'
+        response = client.post('/api/preference', data='', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_preference_authenticated_malformed_json(client):
+    """
+    GIVEN an authenticated user sending malformed JSON
+    WHEN '/api/preference' is POSTed
+    THEN check that 400 is returned
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = 'TestUser'
+        response = client.post('/api/preference', data='{broken', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_preference_authenticated_wrong_top_level(client):
+    """
+    GIVEN an authenticated user sending a top-level list
+    WHEN '/api/preference' is POSTed
+    THEN check that 400 is returned
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = 'TestUser'
+        response = client.post('/api/preference', data='["pref1", "pref2"]', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_preference_authenticated_invalid_field_types(client):
+    """
+    GIVEN an authenticated user sending non-string project/lang types
+    WHEN '/api/preference' is POSTed
+    THEN check that 400 is returned
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = 'TestUser'
+        response = client.post('/api/preference', json={'project': 12345, 'lang': 'fr'})
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_user_language_authenticated_empty_body(client):
+    """
+    GIVEN an authenticated user sending an empty body
+    WHEN '/api/user_language' is POSTed
+    THEN check that 400 is returned
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = 'TestUser'
+        response = client.post('/api/user_language', data='', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_user_language_authenticated_malformed_json(client):
+    """
+    GIVEN an authenticated user sending malformed JSON
+    WHEN '/api/user_language' is POSTed
+    THEN check that 400 is returned
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = 'TestUser'
+        response = client.post('/api/user_language', data='{"broken":', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_user_language_authenticated_wrong_top_level(client):
+    """
+    GIVEN an authenticated user sending a list
+    WHEN '/api/user_language' is POSTed
+    THEN check that 400 is returned
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = 'TestUser'
+        response = client.post('/api/user_language', data='["en"]', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_user_language_authenticated_invalid_field(client):
+    """
+    GIVEN an authenticated user sending non-string user_language
+    WHEN '/api/user_language' is POSTed
+    THEN check that 400 is returned
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = 'TestUser'
+        response = client.post('/api/user_language', json={'user_language': 999})
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_edit_page_empty_body(client):
+    """
+    GIVEN an empty body
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 400 is returned
+    """
+    response = client.post('/api/edit_page', data='', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_edit_page_malformed_json(client):
+    """
+    GIVEN malformed JSON
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 400 is returned
+    """
+    response = client.post('/api/edit_page', data='{broken', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_edit_page_wrong_top_level(client):
+    """
+    GIVEN a JSON list instead of an object
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 400 is returned
+    """
+    response = client.post('/api/edit_page', data='[1, 2]', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_edit_page_invalid_target_url(client):
+    """
+    GIVEN a non-MediaWiki targetUrl
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 400 is returned safely
+    """
+    response = client.post('/api/edit_page', json={
+        'targetUrl': 'https://example.com/not-wiki',
+        'content': 'Some content'
+    })
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_edit_page_missing_namespace_prefix(client):
+    """
+    GIVEN a targetUrl with a filename that lacks a namespace prefix (e.g. no colon)
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 400 is returned safely without IndexError
+    """
+    response = client.post('/api/edit_page', json={
+        'targetUrl': 'https://en.wikipedia.org/wiki/NoNamespaceFile.png',
+        'content': 'Some content'
+    })
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_edit_page_success(client):
+    """
+    GIVEN valid edit_page parameters and mocked remote responses
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 200 is returned
+    """
+    mock_get_csrf = MagicMock()
+    mock_get_csrf.status_code = 200
+    mock_get_csrf.json.return_value = {'query': {'tokens': {'csrftoken': 'mock_csrf_token'}}}
+
+    mock_post_edit = MagicMock()
+    mock_post_edit.status_code = 200
+    mock_post_edit.json.return_value = {'edit': {'result': 'Success'}}
+
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', return_value=mock_get_csrf), \
+         patch('app.requests.post', return_value=mock_post_edit):
+        response = client.post('/api/edit_page', json={
+            'targetUrl': 'https://en.wikipedia.org/wiki/File:ValidFile.png',
+            'content': 'Appended text'
+        })
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] is True
+
+
+def test_edit_article_empty_body(client):
+    """
+    GIVEN an empty body
+    WHEN '/api/edit_article' is POSTed
+    THEN check that 400 is returned
+    """
+    response = client.post('/api/edit_article', data='', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_edit_article_malformed_json(client):
+    """
+    GIVEN malformed JSON
+    WHEN '/api/edit_article' is POSTed
+    THEN check that 400 is returned
+    """
+    response = client.post('/api/edit_article', data='{broken', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_edit_article_wrong_top_level(client):
+    """
+    GIVEN a list instead of an object
+    WHEN '/api/edit_article' is POSTed
+    THEN check that 400 is returned
+    """
+    response = client.post('/api/edit_article', data='[1, 2]', content_type='application/json')
+    assert response.status_code == 400
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+
+
+def test_edit_article_success(client):
+    """
+    GIVEN valid edit_article parameters and mocked remote responses
+    WHEN '/api/edit_article' is POSTed
+    THEN check that 200 is returned
+    """
+    mock_get_csrf = MagicMock()
+    mock_get_csrf.status_code = 200
+    mock_get_csrf.json.return_value = {'query': {'tokens': {'csrftoken': 'mock_csrf_token'}}}
+
+    mock_post_edit = MagicMock()
+    mock_post_edit.status_code = 200
+    mock_post_edit.json.return_value = {'edit': {'result': 'Success'}}
+
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', return_value=mock_get_csrf), \
+         patch('app.requests.post', return_value=mock_post_edit):
+        response = client.post('/api/edit_article', json={
+            'articleName': 'Sample_Article',
+            'content': 'Complete wikitext',
+            'lang': 'en',
+            'project': 'wikipedia'
+        })
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] is True
+
+
+# ============================================================================
+# Increment 4: Preference Route Authentication Tests
+# ============================================================================
+
+def test_post_preference_unauthenticated(client, init_database):
+    """
+    GIVEN an unauthenticated request (user logged out)
+    WHEN '/api/preference' is POSTed
+    THEN check that 401 is returned, no database session is committed,
+         and no user record with username=None or new username is created
+    """
+    from model import User
+
+    initial_user_count = User.query.count()
+
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = None
+        response = client.post('/api/preference', json={
+            'project': 'wiktionary',
+            'lang': 'de',
+            'skip_upload_selection': True
+        })
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Authentication required']
+
+    # Assert no user record was created or committed
+    assert User.query.filter_by(username=None).first() is None
+    assert User.query.count() == initial_user_count
+
+
+def test_post_preference_whitespace_username_unauthenticated(client, init_database):
+    """
+    GIVEN a request with an empty/whitespace username
+    WHEN '/api/preference' is POSTed
+    THEN check that 401 is returned and no user record is created
+    """
+    from model import User
+
+    initial_user_count = User.query.count()
+
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = "   "
+        response = client.post('/api/preference', json={
+            'project': 'wiktionary',
+            'lang': 'de'
+        })
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['errors'] == ['Authentication required']
+    assert User.query.count() == initial_user_count
+
+
+def test_post_user_language_unauthenticated(client, init_database):
+    """
+    GIVEN an unauthenticated request (user logged out)
+    WHEN '/api/user_language' is POSTed
+    THEN check that 401 is returned, no database session is committed,
+         and no user record with username=None or new username is created
+    """
+    from model import User
+
+    initial_user_count = User.query.count()
+
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = None
+        response = client.post('/api/user_language', json={
+            'user_language': 'es'
+        })
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Authentication required']
+
+    # Assert no user record was created or committed
+    assert User.query.filter_by(username=None).first() is None
+    assert User.query.count() == initial_user_count
+
+
+def test_post_user_language_whitespace_username_unauthenticated(client, init_database):
+    """
+    GIVEN a request with an empty/whitespace username
+    WHEN '/api/user_language' is POSTed
+    THEN check that 401 is returned and no user record is created
+    """
+    from model import User
+
+    initial_user_count = User.query.count()
+
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = "   "
+        response = client.post('/api/user_language', json={
+            'user_language': 'es'
+        })
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['errors'] == ['Authentication required']
+    assert User.query.count() == initial_user_count
+
+
+# ============================================================================
+# Increments 5-8: Timeouts, Parsing, Classification, and Consistency Tests
+# ============================================================================
+
+def test_edit_page_unauthenticated(client):
+    """
+    GIVEN an unauthenticated session (ses is None)
+    WHEN '/api/edit_page' is POSTed with valid payload
+    THEN check that 401 Authentication required is returned
+    """
+    with patch('app.authenticated_session', return_value=None):
+        response = client.post('/api/edit_page', json={
+            'targetUrl': 'https://en.wikipedia.org/wiki/File:TestFile.png',
+            'content': 'Valid wikitext content'
+        })
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Authentication required']
+
+
+def test_edit_page_csrf_timeout(client):
+    """
+    GIVEN an authenticated session but remote wiki times out during CSRF retrieval
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 502 Bad Gateway is returned with safe error message
+    """
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', side_effect=requests.exceptions.Timeout("CSRF connect timeout")):
+        response = client.post('/api/edit_page', json={
+            'targetUrl': 'https://en.wikipedia.org/wiki/File:TestFile.png',
+            'content': 'Valid wikitext content'
+        })
+
+    assert response.status_code == 502
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Timeout connecting to remote wiki']
+
+
+def test_edit_page_csrf_parse_error(client):
+    """
+    GIVEN an authenticated session but remote wiki returns malformed CSRF JSON
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 502 Bad Gateway is returned safely without unhandled KeyError
+    """
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = {'query': {}}
+
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', return_value=mock_resp):
+        response = client.post('/api/edit_page', json={
+            'targetUrl': 'https://en.wikipedia.org/wiki/File:TestFile.png',
+            'content': 'Valid wikitext content'
+        })
+
+    assert response.status_code == 502
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Failed to retrieve CSRF token']
+
+
+def test_edit_page_post_timeout(client):
+    """
+    GIVEN valid CSRF token but remote wiki times out during POST edit
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 502 Bad Gateway is returned with safe error message
+    """
+    mock_csrf = MagicMock()
+    mock_csrf.status_code = 200
+    mock_csrf.raise_for_status.return_value = None
+    mock_csrf.json.return_value = {'query': {'tokens': {'csrftoken': 'mock_token'}}}
+
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', return_value=mock_csrf), \
+         patch('app.requests.post', side_effect=requests.exceptions.Timeout("Edit POST timeout")):
+        response = client.post('/api/edit_page', json={
+            'targetUrl': 'https://en.wikipedia.org/wiki/File:TestFile.png',
+            'content': 'Valid wikitext content'
+        })
+
+    assert response.status_code == 502
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Timeout connecting to remote wiki']
+
+
+def test_edit_page_post_api_error(client):
+    """
+    GIVEN valid CSRF token but remote wiki returns an API error on edit
+    WHEN '/api/edit_page' is POSTed
+    THEN check that 502 Bad Gateway is returned with the MediaWiki error message
+    """
+    mock_csrf = MagicMock()
+    mock_csrf.status_code = 200
+    mock_csrf.raise_for_status.return_value = None
+    mock_csrf.json.return_value = {'query': {'tokens': {'csrftoken': 'mock_token'}}}
+
+    mock_edit = MagicMock()
+    mock_edit.status_code = 200
+    mock_edit.raise_for_status.return_value = None
+    mock_edit.json.return_value = {'error': {'info': 'Protected page', 'code': 'protectedpage'}}
+
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', return_value=mock_csrf), \
+         patch('app.requests.post', return_value=mock_edit):
+        response = client.post('/api/edit_page', json={
+            'targetUrl': 'https://en.wikipedia.org/wiki/File:TestFile.png',
+            'content': 'Valid wikitext content'
+        })
+
+    assert response.status_code == 502
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Edit Error: Protected page']
+
+
+def test_edit_article_unauthenticated(client):
+    """
+    GIVEN an unauthenticated session (ses is None)
+    WHEN '/api/edit_article' is POSTed with valid payload
+    THEN check that 401 Authentication required is returned
+    """
+    with patch('app.authenticated_session', return_value=None):
+        response = client.post('/api/edit_article', json={
+            'articleName': 'Sample_Article',
+            'content': 'New wikitext content',
+            'lang': 'en',
+            'project': 'wikipedia'
+        })
+
+    assert response.status_code == 401
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Authentication required']
+
+
+def test_edit_article_csrf_timeout(client):
+    """
+    GIVEN an authenticated session but remote wiki times out during CSRF retrieval
+    WHEN '/api/edit_article' is POSTed
+    THEN check that 502 Bad Gateway is returned with safe error message
+    """
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', side_effect=requests.exceptions.Timeout("CSRF connect timeout")):
+        response = client.post('/api/edit_article', json={
+            'articleName': 'Sample_Article',
+            'content': 'New wikitext content',
+            'lang': 'en',
+            'project': 'wikipedia'
+        })
+
+    assert response.status_code == 502
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Timeout connecting to remote wiki']
+
+
+def test_edit_article_csrf_parse_error(client):
+    """
+    GIVEN an authenticated session but remote wiki returns malformed CSRF response
+    WHEN '/api/edit_article' is POSTed
+    THEN check that 502 Bad Gateway is returned safely without unhandled KeyError
+    """
+    mock_resp = MagicMock()
+    mock_resp.status_code = 200
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = {'query': {}}
+
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', return_value=mock_resp):
+        response = client.post('/api/edit_article', json={
+            'articleName': 'Sample_Article',
+            'content': 'New wikitext content',
+            'lang': 'en',
+            'project': 'wikipedia'
+        })
+
+    assert response.status_code == 502
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Failed to retrieve CSRF token']
+
+
+def test_edit_article_post_timeout(client):
+    """
+    GIVEN valid CSRF token but remote wiki times out during POST edit
+    WHEN '/api/edit_article' is POSTed
+    THEN check that 502 Bad Gateway is returned with safe error message
+    """
+    mock_csrf = MagicMock()
+    mock_csrf.status_code = 200
+    mock_csrf.raise_for_status.return_value = None
+    mock_csrf.json.return_value = {'query': {'tokens': {'csrftoken': 'mock_token'}}}
+
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', return_value=mock_csrf), \
+         patch('app.requests.post', side_effect=requests.exceptions.Timeout("Edit POST timeout")):
+        response = client.post('/api/edit_article', json={
+            'articleName': 'Sample_Article',
+            'content': 'New wikitext content',
+            'lang': 'en',
+            'project': 'wikipedia'
+        })
+
+    assert response.status_code == 502
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Timeout connecting to remote wiki']
+
+
+def test_edit_article_post_api_error(client):
+    """
+    GIVEN valid CSRF token but remote wiki returns an API error on edit
+    WHEN '/api/edit_article' is POSTed
+    THEN check that 502 Bad Gateway is returned with the MediaWiki error message
+    """
+    mock_csrf = MagicMock()
+    mock_csrf.status_code = 200
+    mock_csrf.raise_for_status.return_value = None
+    mock_csrf.json.return_value = {'query': {'tokens': {'csrftoken': 'mock_token'}}}
+
+    mock_edit = MagicMock()
+    mock_edit.status_code = 200
+    mock_edit.raise_for_status.return_value = None
+    mock_edit.json.return_value = {'error': {'info': 'Protected page', 'code': 'protectedpage'}}
+
+    with patch('app.authenticated_session', return_value=MagicMock()), \
+         patch('app.requests.get', return_value=mock_csrf), \
+         patch('app.requests.post', return_value=mock_edit):
+        response = client.post('/api/edit_article', json={
+            'articleName': 'Sample_Article',
+            'content': 'New wikitext content',
+            'lang': 'en',
+            'project': 'wikipedia'
+        })
+
+    assert response.status_code == 502
+    data = response.get_json()
+    assert data['success'] is False
+    assert data['status'] == 'FAILURE'
+    assert data['errors'] == ['Edit Error: Protected page']
+
+
+def test_task_status_failed_with_timeout_exception(client):
+    """
+    GIVEN a failed background Celery task whose result is requests.exceptions.Timeout
+    WHEN '/api/task_status/<task_id>' is requested
+    THEN check that 200 is returned with status FAILURE and clean error message (no leaked connection pool details)
+    """
+    mock_task = MagicMock()
+    mock_task.status = 'FAILURE'
+    mock_task.successful.return_value = False
+    mock_task.failed.return_value = True
+    mock_task.result = requests.exceptions.Timeout("HTTPSConnectionPool(host='en.wikipedia.org'): Read timed out")
+
+    with patch('app.AsyncResult', return_value=mock_task):
+        response = client.get('/api/task_status/task-timeout-test')
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['status'] == 'FAILURE'
+    assert data['error'] == 'Request timed out connecting to remote wiki'
+    assert 'HTTPSConnectionPool' not in str(data)
+
+
+def test_task_status_failed_with_request_exception(client):
+    """
+    GIVEN a failed background Celery task whose result is requests.exceptions.ConnectionError
+    WHEN '/api/task_status/<task_id>' is requested
+    THEN check that 200 is returned with status FAILURE and clean error message
+    """
+    mock_task = MagicMock()
+    mock_task.status = 'FAILURE'
+    mock_task.successful.return_value = False
+    mock_task.failed.return_value = True
+    mock_task.result = requests.exceptions.ConnectionError("Connection refused to remote host")
+
+    with patch('app.AsyncResult', return_value=mock_task):
+        response = client.get('/api/task_status/task-conn-err-test')
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['status'] == 'FAILURE'
+    assert data['error'] == 'Network error connecting to remote wiki'
+
+
+def test_get_preference_error_key_consistency(client):
+    """
+    GIVEN a GET request to '/api/preference'
+    WHEN requested
+    THEN check that 'errors' key is present and is an empty list
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = None
+        response = client.get('/api/preference')
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert 'errors' in data
+    assert data['errors'] == []
+
+
+def test_get_user_language_error_key_consistency(client):
+    """
+    GIVEN a GET request to '/api/user_language'
+    WHEN requested
+    THEN check that 'errors' key is present and is an empty list
+    """
+    with patch('app.MW_OAUTH') as mock_oauth:
+        mock_oauth.get_current_user.return_value = None
+        response = client.get('/api/user_language')
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert 'errors' in data
+    assert data['errors'] == []

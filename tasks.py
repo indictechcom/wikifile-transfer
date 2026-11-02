@@ -5,6 +5,7 @@ import urllib.parse
 import os
 from utils import get_wikitext, getHeader
 from celery.utils.log import get_task_logger
+from exceptions import UploadError, MediaWikiAPIError
 
 # Initialize Celery logger
 logger = get_task_logger(__name__)
@@ -66,7 +67,7 @@ def upload_task_item(self, file_path, tr_project, task_item, src_fileext, OAuthO
             "format": "json"
         }
 
-        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader())
+        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader(), timeout=(10, 20))
         response.raise_for_status()
         csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
@@ -94,18 +95,23 @@ def upload_task_item(self, file_path, tr_project, task_item, src_fileext, OAuthO
                 files=files,
                 data=upload_param,
                 auth=ses,
-                headers=getHeader()
+                headers=getHeader(),
+                timeout=(10, 120)
             ).json()
 
         # Catch API-level upload errors embedded in 200 JSON
         if "error" in upload_resp:
             api_err = upload_resp["error"].get("info", str(upload_resp["error"]))
             logger.error(f"[task:{task_id}] Wikimedia API Upload Error: {api_err}")
-            raise Exception(f"Wikimedia API Upload Error: {api_err}")
+            raise MediaWikiAPIError(f"Wikimedia API Upload Error: {api_err}")
 
         # Extract success URLs
-        wikifile_url = upload_resp["upload"]["imageinfo"]["descriptionurl"]
-        file_link = upload_resp["upload"]["imageinfo"]["url"]
+        try:
+            wikifile_url = upload_resp["upload"]["imageinfo"]["descriptionurl"]
+            file_link = upload_resp["upload"]["imageinfo"]["url"]
+        except (KeyError, TypeError) as e:
+            logger.error(f"[task:{task_id}] Upload response missing image info data: {upload_resp}")
+            raise UploadError("Upload response missing image info data") from e
 
         logger.info(f"[task:{task_id}] File uploaded successfully: {wikifile_url}")
         self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
@@ -163,7 +169,8 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
             "format": "json"
         }
 
-        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader())
+        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader(), timeout=(10, 20))
+        response.raise_for_status()
         csrf_token = response.json()["query"]["tokens"]["csrftoken"]
 
         self.update_state(state='PROGRESS', meta={'current': 25, 'total': 100})
@@ -179,18 +186,26 @@ def upload_image_task(self, file_path, tr_filename, src_fileext, tr_endpoint, OA
 
         with open(file_path, 'rb') as f:
             files = {'file': f}
-            response = requests.post(url=tr_endpoint, files=files, data=upload_param, auth=ses, headers=getHeader()).json()
+            response = requests.post(
+                url=tr_endpoint, files=files, data=upload_param, auth=ses, headers=getHeader(), timeout=(10, 120)
+            ).json()
 
         self.update_state(state='PROGRESS', meta={'current': 75, 'total': 100})
+
+        # Check API-level upload errors embedded in 200 JSON
+        if "error" in response:
+            api_err = response["error"].get("info", str(response["error"]))
+            logger.error(f"[task:{task_id}] Wikimedia API Upload Error: {api_err}")
+            raise MediaWikiAPIError(f"Wikimedia API Upload Error: {api_err}")
 
         # Try block to get Link and URL
         try:
             wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
             file_link = response["upload"]["imageinfo"]["url"]
             logger.info(f"[task:{task_id}] Standalone upload successful: {wikifile_url}")
-        except KeyError:
+        except (KeyError, TypeError) as e:
             logger.error(f"[task:{task_id}] Upload response missing image info data: {response}")
-            return {"success": False, "data": {}, "errors": ["Upload failed"]}
+            raise UploadError("Upload response missing image info data") from e
 
         self.update_state(state='PROGRESS', meta={'current': 100, 'total': 100})
 
