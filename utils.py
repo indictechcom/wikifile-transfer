@@ -1,12 +1,20 @@
+import os
 import urllib.parse
 import datetime
 import requests
 import mwparserfromhell
 from templatelist import TEMPLATES
 import logging
+from exceptions import UploadError, MediaWikiAPIError, DownloadError
 
 # Initialize module logger
 logger = logging.getLogger(__name__)
+
+# Request timeouts: (connect_timeout, read_timeout)
+API_TIMEOUT = (10, 20)
+FILE_DOWNLOAD_TIMEOUT = (10, 60)
+FILE_UPLOAD_TIMEOUT = (10, 120)
+LANGLINKS_TIMEOUT = (5, 15)
 
 def download_image(src_project, src_lang, src_filename):
     logger.info(f"Downloading image {src_filename} from {src_lang}.{src_project}.org")
@@ -22,10 +30,18 @@ def download_image(src_project, src_lang, src_filename):
     }
 
     try:
-        page = requests.get(url=src_endpoint, params=param, headers=getHeader()).json()['query']['pages']
+        response = requests.get(url=src_endpoint, params=param, headers=getHeader(), timeout=API_TIMEOUT)
+        response.raise_for_status()
+        page = response.json()['query']['pages']
         image_url = list (page.values()) [0]["imageinfo"][0]["url"]
     except KeyError as e:
         logger.error(f"Image info KeyError for {src_filename}: {e}")
+        return None
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout fetching image details for {src_filename}: {e}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error fetching image details for {src_filename}: {e}")
         return None
     except Exception as e:
         logger.error(f"Error fetching image details for {src_filename}: {e}")
@@ -36,13 +52,23 @@ def download_image(src_project, src_lang, src_filename):
     get_filename = current_time.replace(':', '_').replace(' ', '_')
 
     try:
-        r = requests.get(image_url, allow_redirects=True, headers=getHeader())
-        filename = get_filename + "." + r.headers.get('content-type').replace('image/', '')
+        r = requests.get(image_url, allow_redirects=True, headers=getHeader(), timeout=FILE_DOWNLOAD_TIMEOUT)
+        r.raise_for_status()
+        content_type = r.headers.get('content-type', '')
+        ext = content_type.replace('image/', '') if 'image/' in content_type else 'png'
+        filename = get_filename + "." + ext
+        os.makedirs("temp_images", exist_ok=True)
         with open("temp_images/" + filename, 'wb') as f:
             f.write(r.content)
 
         logger.info(f"Successfully downloaded to temp_images/{filename}")
         return filename
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout downloading image {image_url}: {e}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error downloading image {image_url}: {e}")
+        return None
     except Exception as e:
         logger.error(f"Failed to download and save image {image_url}: {e}", exc_info=True)
         return None
@@ -58,8 +84,15 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     }
 
     try:
-        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader())
+        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader(), timeout=API_TIMEOUT)
+        response.raise_for_status()
         csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout fetching CSRF token from {tr_endpoint}: {e}")
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error fetching CSRF token from {tr_endpoint}: {e}")
+        return None
     except Exception as e:
         logger.error(f"Failed to fetch CSRF token from {tr_endpoint}: {e}")
         return None
@@ -77,17 +110,30 @@ def process_upload(file_path, tr_filename, src_fileext, tr_endpoint, ses):
     try:
         with open(file_path, 'rb') as f:
             files = {'file': f}
-            response = requests.post(url=tr_endpoint, files=files, data=upload_param, auth=ses, headers=getHeader()).json()
+            response = requests.post(
+                url=tr_endpoint, files=files, data=upload_param, auth=ses, headers=getHeader(), timeout=FILE_UPLOAD_TIMEOUT
+            ).json()
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout during POST upload for {tr_filename}: {e}", exc_info=True)
+        return None
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error during POST upload for {tr_filename}: {e}", exc_info=True)
+        return None
     except Exception as e:
         logger.error(f"POST upload request failed for {tr_filename}: {e}", exc_info=True)
         return None
+
+    if "error" in response:
+        api_err = response["error"].get("info", str(response["error"]))
+        logger.error(f"Wikimedia API Upload Error: {api_err}")
+        raise MediaWikiAPIError(f"Wikimedia API Upload Error: {api_err}")
 
     # Try block to get Link and URL
     try:
         wikifile_url = response["upload"]["imageinfo"]["descriptionurl"]
         file_link = response["upload"]["imageinfo"]["url"]
         logger.info(f"Upload successful: {wikifile_url}")
-    except KeyError as e:
+    except (KeyError, TypeError) as e:
         logger.error(f"Upload response missing image info data: {response}")
         return None
 
@@ -116,17 +162,22 @@ def get_localized_wikitext(wikitext, src_endpoint, target_lang):
                     }
 
                     try:
-                        response = requests.get(url=src_endpoint, params=lang_param, headers=getHeader())
+                        response = requests.get(
+                            url=src_endpoint, params=lang_param, headers=getHeader(), timeout=LANGLINKS_TIMEOUT
+                        )
                         response.raise_for_status()
-                        langlinks = response.json()["query"]["pages"][0]["langlinks"]
+                        pages = response.json().get("query", {}).get("pages", [])
+                        if not pages:
+                            continue
 
+                        langlinks = pages[0].get("langlinks", [])
                         for langlink in langlinks:
-                            if langlink["lang"] == target_lang:
-                                template.add("Article", langlink["title"])
+                            if langlink.get("lang") == target_lang:
+                                template.add("Article", langlink.get("title", ""))
                                 break
                     except Exception as e:
                         logger.warning(f"Error fetching langlinks for {article_title}: {e}")
-                        return str(wikicode)
+                        continue
 
     return str(wikicode)
 
@@ -145,14 +196,21 @@ def get_wikitext(article_name, tr_endpoint, ses):
         "formatversion": "2"
     }
 
-    response = requests.get(url=tr_endpoint, params=params, auth=ses, headers=getHeader())
-    response.raise_for_status()
-    data = response.json()
+    try:
+        response = requests.get(url=tr_endpoint, params=params, auth=ses, headers=getHeader(), timeout=API_TIMEOUT)
+        response.raise_for_status()
+        data = response.json()
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout fetching wikitext for {title}: {e}")
+        raise MediaWikiAPIError(f"Timeout fetching wikitext for {title}") from e
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error fetching wikitext for {title}: {e}")
+        raise MediaWikiAPIError(f"Network error fetching wikitext for {title}") from e
 
     if "error" in data:
         error_info = data["error"].get("info", "Failed to fetch wikitext")
         logger.error(f"Wikitext API error for {title}: {error_info}")
-        raise Exception(error_info)
+        raise MediaWikiAPIError(error_info)
 
     return data["parse"]["wikitext"]
 
@@ -183,9 +241,16 @@ def process_task_item(file_path, tr_project, task_item, src_fileext, ses):
         "format": "json"
     }
 
-    response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader())
-    response.raise_for_status()
-    csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+    try:
+        response = requests.get(url=tr_endpoint, params=csrf_param, auth=ses, headers=getHeader(), timeout=API_TIMEOUT)
+        response.raise_for_status()
+        csrf_token = response.json()["query"]["tokens"]["csrftoken"]
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout fetching CSRF token from {tr_endpoint}: {e}")
+        raise MediaWikiAPIError(f"Timeout fetching CSRF token from {tr_endpoint}") from e
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error fetching CSRF token from {tr_endpoint}: {e}")
+        raise MediaWikiAPIError(f"Network error fetching CSRF token from {tr_endpoint}") from e
 
     upload_param = {
         "action": "upload",
@@ -198,23 +263,36 @@ def process_task_item(file_path, tr_project, task_item, src_fileext, ses):
     if add_template and page_content:
         upload_param["text"] = page_content
 
-    with open(file_path, 'rb') as f:
-        files = {'file': f}
-        upload_resp = requests.post(
-            url=tr_endpoint,
-            files=files,
-            data=upload_param,
-            auth=ses,
-            headers=getHeader()
-        ).json()
+    try:
+        with open(file_path, 'rb') as f:
+            files = {'file': f}
+            upload_resp = requests.post(
+                url=tr_endpoint,
+                files=files,
+                data=upload_param,
+                auth=ses,
+                headers=getHeader(),
+                timeout=FILE_UPLOAD_TIMEOUT
+            ).json()
+    except requests.exceptions.Timeout as e:
+        logger.error(f"Timeout uploading file to {tr_endpoint}: {e}")
+        raise UploadError(f"Timeout uploading file to {tr_endpoint}") from e
+    except requests.exceptions.RequestException as e:
+        logger.error(f"Network error uploading file to {tr_endpoint}: {e}")
+        raise UploadError(f"Network error uploading file to {tr_endpoint}") from e
 
     if "error" in upload_resp:
         api_err = upload_resp["error"].get("info", str(upload_resp["error"]))
         logger.error(f"Wikimedia API Upload Error: {api_err}")
-        raise Exception(f"Wikimedia API Upload Error: {api_err}")
+        raise MediaWikiAPIError(f"Wikimedia API Upload Error: {api_err}")
 
-    wikifile_url = upload_resp["upload"]["imageinfo"]["descriptionurl"]
-    file_link = upload_resp["upload"]["imageinfo"]["url"]
+    try:
+        wikifile_url = upload_resp["upload"]["imageinfo"]["descriptionurl"]
+        file_link = upload_resp["upload"]["imageinfo"]["url"]
+    except (KeyError, TypeError) as e:
+        logger.error(f"Upload response missing image info data: {upload_resp}")
+        raise UploadError("Upload response missing image info data") from e
+
     logger.info(f"Successfully processed item: {wikifile_url}")
 
     wikitext_fetch_success = None
